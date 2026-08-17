@@ -1,0 +1,230 @@
+{
+  "__provenance": "SYNTHETIC, de-identified fixture written by hand. This was NOT captured from a real X response: no signed-in X session was available in the authoring environment. Shapes are reconstructed from the documented GraphQL timeline structure and MUST be re-verified against a real, redacted capture before release. Contains no real user, id, handle, token, cookie or header.",
+  "data": {
+    "user": {
+      "result": {
+        "__typename": "User",
+        "timeline": {
+          "timeline": {
+            "instructions": [
+              { "type": "TimelineClearCache" },
+              {
+                "type": "TimelineAddEntries",
+                "entries": [
+                  {
+                    "entryId": "user-1000000000000000001",
+                    "sortIndex": "1900000000000000001",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "id": "VXNlcjoxMDAwMDAwMDAwMDAwMDAwMDAx",
+                            "rest_id": "1000000000000000001",
+                            "core": {
+                              "created_at": "Thu Jan 01 00:00:00 +0000 2020",
+                              "name": "Synthetic Alpha",
+                              "screen_name": "alpha_user"
+                            },
+                            "avatar": {
+                              "image_url": "https://pbs.twimg.com/profile_images/1000000000000000001/synthetic_normal.jpg"
+                            },
+                            "relationship_perspectives": {
+                              "following": true,
+                              "followed_by": true
+                            },
+                            "legacy": {
+                              "followers_count": 0,
+                              "friends_count": 0
+                            }
+                          }
+                        }
+                      },
+                      "clientEventInfo": {
+                        "component": "FollowingTimeline"
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "user-1000000000000000002",
+                    "sortIndex": "1900000000000000002",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "rest_id": "1000000000000000002",
+                            "legacy": {
+                              "name": "Synthetic Beta",
+                              "screen_name": "Beta_User",
+                              "profile_image_url_https": "https://pbs.twimg.com/profile_images/1000000000000000002/synthetic_normal.jpg",
+                              "following": true,
+                              "followed_by": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "user-1000000000000000003",
+                    "sortIndex": "1900000000000000003",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "rest_id": "1000000000000000003",
+                            "core": {
+                              "name": "Synthetic Gamma",
+                              "screen_name": "gamma_user"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "user-1000000000000000004",
+                    "sortIndex": "1900000000000000004",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "user_results": {
+                          "result": {
+                            "__typename": "UserUnavailable",
+                            "rest_id": "1000000000000000004",
+                            "reason": "Suspended",
+                            "core": {
+                              "name": "Synthetic Unavailable",
+                              "screen_name": "unavailable_user"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "tombstone-1000000000000000005",
+                    "sortIndex": "1900000000000000005",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineTombstone",
+                        "__typename": "TimelineTombstone",
+                        "tombstoneInfo": {
+                          "text": "",
+                          "richText": { "text": "" }
+                        },
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "rest_id": "1000000000000000005",
+                            "core": {
+                              "name": "Synthetic Tombstoned",
+                              "screen_name": "tombstoned_user"
+                            },
+                            "relationship_perspectives": { "followed_by": false }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "promoted-user-1000000000000000006",
+                    "sortIndex": "1900000000000000006",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "promotedMetadata": {
+                          "advertiser_results": { "result": {} },
+                          "disclosureType": "NoDisclosure"
+                        },
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "rest_id": "1000000000000000006",
+                            "core": {
+                              "name": "Synthetic Promoted",
+                              "screen_name": "promoted_user"
+                            },
+                            "relationship_perspectives": { "followed_by": false }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "user-1000000000000000001-repeat",
+                    "sortIndex": "1900000000000000007",
+                    "content": {
+                      "entryType": "TimelineTimelineItem",
+                      "__typename": "TimelineTimelineItem",
+                      "itemContent": {
+                        "itemType": "TimelineUser",
+                        "__typename": "TimelineUser",
+                        "user_results": {
+                          "result": {
+                            "__typename": "User",
+                            "rest_id": "1000000000000000001",
+                            "core": {
+                              "name": "Synthetic Alpha",
+                              "screen_name": "alpha_user"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "entryId": "cursor-top-1900000000000000008",
+                    "sortIndex": "1900000000000000008",
+                    "content": {
+                      "entryType": "TimelineTimelineCursor",
+                      "__typename": "TimelineTimelineCursor",
+                      "value": "REDACTED_TOP_CURSOR",
+                      "cursorType": "Top"
+                    }
+                  },
+                  {
+                    "entryId": "cursor-bottom-1900000000000000009",
+                    "sortIndex": "1900000000000000009",
+                    "content": {
+                      "entryType": "TimelineTimelineCursor",
+                      "__typename": "TimelineTimelineCursor",
+                      "value": "REDACTED_BOTTOM_CURSOR",
+                      "cursorType": "Bottom"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "TimelineTerminateTimeline",
+                "direction": "Top"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

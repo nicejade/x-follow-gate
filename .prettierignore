@@ -1,0 +1,8 @@
+# Build output and lockfiles are machine generated.
+dist/
+coverage/
+package-lock.json
+
+# Design and planning documents are owned outside this repository's tooling.
+docs/
+.superpowers/
