@@ -208,4 +208,67 @@ describe("Side Panel", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "白名单" })[0]!);
     expect(messages.some((message) => message.type === "WHITELIST_UPDATE")).toBe(true);
   });
+
+  it("shows sync target count in settings with default and helper copy", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    expect(screen.getByRole("spinbutton", { name: "每轮同步人数" })).toHaveValue(1_000);
+    expect(screen.getByText("100–5000，默认 1000")).toBeInTheDocument();
+  });
+
+  it("saves sync target count through SETTINGS_UPDATE", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    const input = screen.getByRole("spinbutton", { name: "每轮同步人数" });
+    fireEvent.change(input, {
+      target: { value: "2500" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(messages).toContainEqual({
+      type: "SETTINGS_UPDATE",
+      settings: expect.objectContaining({ syncTargetCount: 2_500 }),
+    });
+    expect(input).toHaveValue(2_500);
+  });
+
+  it("keeps cleared sync target count blank until save", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    const input = screen.getByRole("spinbutton", { name: "每轮同步人数" });
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input).toHaveValue(null);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(messages).toContainEqual({
+      type: "SETTINGS_UPDATE",
+      settings: expect.objectContaining({ syncTargetCount: 1_000 }),
+    });
+    expect(input).toHaveValue(1_000);
+  });
+
+  it("clamps out-of-range sync target count on save", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    const input = screen.getByRole("spinbutton", { name: "每轮同步人数" });
+    fireEvent.change(input, {
+      target: { value: "99999" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(messages).toContainEqual({
+      type: "SETTINGS_UPDATE",
+      settings: expect.objectContaining({ syncTargetCount: 5_000 }),
+    });
+    expect(input).toHaveValue(5_000);
+  });
 });

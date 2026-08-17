@@ -27,7 +27,11 @@ export const HARD_LIMITS = {
   maxHourlyCap: 12,
   maxDailyCap: 40,
   maxSessionCap: 20,
+  minSyncTargetCount: 100,
+  maxSyncTargetCount: 5_000,
 } as const;
+
+export const DEFAULT_SYNC_TARGET_COUNT = 1_000;
 
 export const PRESET_LIMITS = {
   safe: {
@@ -56,6 +60,7 @@ export const DEFAULT_ACTIVE_HOURS: ActiveHours = {
 export const SAFE_SETTINGS: Settings = {
   preset: "safe",
   ...PRESET_LIMITS.safe,
+  syncTargetCount: DEFAULT_SYNC_TARGET_COUNT,
   activeHours: { ...DEFAULT_ACTIVE_HOURS },
 };
 
@@ -118,9 +123,16 @@ function normalizeActiveHours(activeHours: ActiveHours | undefined): ActiveHours
 export function clampSettings(settings: Settings): Settings {
   const preset = normalizePreset(settings.preset);
   const activeHours = normalizeActiveHours(settings.activeHours);
+  const syncTargetCount = Number.isFinite(settings.syncTargetCount)
+    ? clampInt(
+        settings.syncTargetCount,
+        HARD_LIMITS.minSyncTargetCount,
+        HARD_LIMITS.maxSyncTargetCount,
+      )
+    : DEFAULT_SYNC_TARGET_COUNT;
 
   if (preset !== "custom") {
-    return { preset, ...PRESET_LIMITS[preset], activeHours };
+    return { preset, ...PRESET_LIMITS[preset], syncTargetCount, activeHours };
   }
 
   const intervalMinSec = Math.max(
@@ -137,6 +149,7 @@ export function clampSettings(settings: Settings): Settings {
     hourlyCap: clampInt(settings.hourlyCap, 1, HARD_LIMITS.maxHourlyCap),
     dailyCap: clampInt(settings.dailyCap, 1, HARD_LIMITS.maxDailyCap),
     sessionCap: clampInt(settings.sessionCap, 1, HARD_LIMITS.maxSessionCap),
+    syncTargetCount,
     activeHours,
   };
 }

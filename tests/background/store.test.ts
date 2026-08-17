@@ -35,6 +35,7 @@ function unsafeSettings(): Settings {
     hourlyCap: 99,
     dailyCap: 99,
     sessionCap: 99,
+    syncTargetCount: 1_000,
     activeHours: { enabled: true, start: "09:00", end: "23:00" },
   };
 }
@@ -115,6 +116,23 @@ describe("loadState", () => {
     expect(settings.hourlyCap).toBe(HARD_LIMITS.maxHourlyCap);
     expect(settings.dailyCap).toBe(HARD_LIMITS.maxDailyCap);
     expect(settings.sessionCap).toBe(HARD_LIMITS.maxSessionCap);
+  });
+
+  it("hydrates legacy settings without syncTargetCount", async () => {
+    storage.seed({
+      ...createDefaultState(),
+      settings: {
+        preset: "safe",
+        intervalMinSec: 90,
+        intervalMaxSec: 150,
+        hourlyCap: 5,
+        dailyCap: 20,
+        sessionCap: 10,
+        activeHours: { enabled: true, start: "09:00", end: "23:00" },
+      } as Settings,
+    });
+
+    expect((await loadState()).settings.syncTargetCount).toBe(1_000);
   });
 
   it("normalizes persisted following records the same way a batch is normalized", async () => {

@@ -245,7 +245,10 @@ export async function startSync(now: number = Date.now()): Promise<StartSyncResu
     syncMeta: freshRunningMeta(current, now),
   }));
 
-  const delivered = await sendToTab(tabId, { type: "SCROLL_SESSION_START" });
+  const delivered = await sendToTab(tabId, {
+    type: "SCROLL_SESSION_START",
+    syncTargetCount: state.settings.syncTargetCount,
+  });
 
   return { ok: true, tabId, delivered };
 }
@@ -491,6 +494,9 @@ export async function applyAuthStatus(
   }
 
   if (before.syncMeta.status === "running" && sameAccount(owner, normalized)) {
-    await sendToTab(tabId, { type: "SCROLL_SESSION_START" });
+    await sendToTab(tabId, {
+      type: "SCROLL_SESSION_START",
+      syncTargetCount: before.settings.syncTargetCount,
+    });
   }
 }

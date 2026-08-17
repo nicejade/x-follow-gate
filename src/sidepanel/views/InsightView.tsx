@@ -25,7 +25,7 @@ export function InsightView({ state, send }: InsightViewProps) {
         <StatusBanner>关注列表标签页已隐藏超过 45 秒，滚动已暂停。请保持该标签在前。</StatusBanner>
       ) : null}
       {state.syncMeta.pauseReason === "budget" ? (
-        <StatusBanner>本轮同步已达时长或步数上限，可稍后继续。</StatusBanner>
+        <StatusBanner>本轮同步已达到人数上限，可继续发起下一轮。</StatusBanner>
       ) : null}
       {state.syncMeta.pauseReason === "stalled" || state.syncMeta.status === "completed" ? (
         <StatusBanner>

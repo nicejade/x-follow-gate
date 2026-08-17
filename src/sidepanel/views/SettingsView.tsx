@@ -34,10 +34,36 @@ export function SettingsView({ state, send }: SettingsViewProps) {
             {HARD_LIMITS.maxDailyCap}，每会话 ≤{HARD_LIMITS.maxSessionCap}。起止相同时视为全天开放。
           </p>
         ) : null}
+        <label className="block space-y-2 text-sm">
+          <span id="sync-target-count-label" className="font-medium">
+            每轮同步人数
+          </span>
+          <input
+            type="number"
+            aria-labelledby="sync-target-count-label"
+            min={HARD_LIMITS.minSyncTargetCount}
+            max={HARD_LIMITS.maxSyncTargetCount}
+            step={100}
+            value={Number.isFinite(draft.syncTargetCount) ? draft.syncTargetCount : ""}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                syncTargetCount:
+                  event.target.value === "" ? Number.NaN : Number(event.target.value),
+              }))
+            }
+            className="min-h-11 w-full rounded-[var(--radius-panel)] border border-border bg-surface px-3 text-sm"
+          />
+          <span className="block text-xs text-muted">100–5000，默认 1000</span>
+        </label>
         <button
           type="button"
           className="min-h-11 w-full rounded-[var(--radius-panel)] bg-surface-raised text-sm"
-          onClick={() => send({ type: "SETTINGS_UPDATE", settings: clampSettings(draft) })}
+          onClick={() => {
+            const settings = clampSettings(draft);
+            setDraft(settings);
+            send({ type: "SETTINGS_UPDATE", settings });
+          }}
         >
           保存设置
         </button>

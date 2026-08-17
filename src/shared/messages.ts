@@ -36,7 +36,7 @@ export type ExtensionMessage =
   | { type: "SCROLL_STATUS"; status: ScrollStatus }
   // Worker → content script. The worker owns the round; the content script only
   // reacts to these three commands and never decides to scroll on its own.
-  | { type: "SCROLL_SESSION_START" }
+  | { type: "SCROLL_SESSION_START"; syncTargetCount: number }
   | { type: "SCROLL_SESSION_PAUSE"; reason: SyncPauseReason }
   | { type: "SCROLL_SESSION_STOP" }
   /** Content script → worker. `null` means "unknown" and blocks every write. */

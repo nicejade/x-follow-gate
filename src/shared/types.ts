@@ -58,6 +58,7 @@ export interface Settings {
   hourlyCap: number;
   dailyCap: number;
   sessionCap: number;
+  syncTargetCount: number;
   activeHours: ActiveHours;
 }
 

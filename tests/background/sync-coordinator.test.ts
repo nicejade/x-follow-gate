@@ -224,14 +224,21 @@ describe("startSync", () => {
   });
 
   it("reuses an open Following tab and brings it to the front", async () => {
-    storage.seed(signedInState());
+    storage.seed(
+      signedInState({
+        settings: { ...createDefaultState().settings, syncTargetCount: 2_000 },
+      }),
+    );
 
     const result = await startSync(NOW);
 
     expect(result).toMatchObject({ ok: true, tabId: 7 });
     expect(tabs.api.create).not.toHaveBeenCalled();
     expect(tabs.updates).toEqual([{ tabId: 7, active: true }]);
-    expect(tabs.messages).toEqual([{ tabId: 7, message: { type: "SCROLL_SESSION_START" } }]);
+    expect(tabs.messages).toContainEqual({
+      tabId: 7,
+      message: { type: "SCROLL_SESSION_START", syncTargetCount: 2_000 },
+    });
   });
 
   it("recognizes the Following tab across hosts, casing and a trailing slash", async () => {
@@ -882,13 +889,17 @@ describe("applyAuthStatus", () => {
   it("re-sends the scroll command when the same account reports in during a running round", async () => {
     storage.seed(
       signedInState({
+        settings: { ...createDefaultState().settings, syncTargetCount: 3_000 },
         syncMeta: { ...createDefaultState().syncMeta, status: "running", startedAt: NOW - 1_000 },
       }),
     );
 
     await applyAuthStatus(ACCOUNT, 7, NOW);
 
-    expect(tabs.messages).toEqual([{ tabId: 7, message: { type: "SCROLL_SESSION_START" } }]);
+    expect(tabs.messages).toContainEqual({
+      tabId: 7,
+      message: { type: "SCROLL_SESSION_START", syncTargetCount: 3_000 },
+    });
     expect(storage.persisted().syncMeta.status).toBe("running");
   });
 

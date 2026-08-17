@@ -23,6 +23,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     hourlyCap: 5,
     dailyCap: 20,
     sessionCap: 10,
+    syncTargetCount: 1_000,
     activeHours: { enabled: false, start: "09:00", end: "23:00" },
     ...overrides,
   };
@@ -56,6 +57,8 @@ describe("hard safety constants", () => {
       maxHourlyCap: 12,
       maxDailyCap: 40,
       maxSessionCap: 20,
+      minSyncTargetCount: 100,
+      maxSyncTargetCount: 5_000,
     });
   });
 
@@ -73,6 +76,7 @@ describe("clampSettings", () => {
       hourlyCap: 99,
       dailyCap: 99,
       sessionCap: 99,
+      syncTargetCount: 1_000,
       activeHours: { enabled: false, start: "09:00", end: "23:00" },
     });
 
@@ -205,6 +209,30 @@ describe("clampSettings", () => {
     expect(missing.activeHours).toEqual({ enabled: true, start: "09:00", end: "23:00" });
   });
 
+  it("defaults the sync target to 1000", () => {
+    expect(createDefaultSettings().syncTargetCount).toBe(1_000);
+  });
+
+  it.each([
+    [1, 100],
+    [100, 100],
+    [1_234.9, 1_234],
+    [5_000, 5_000],
+    [99_999, 5_000],
+    [Number.NaN, 1_000],
+  ])("clamps sync target %s to %s", (value, expected) => {
+    expect(clampSettings(settings({ syncTargetCount: value })).syncTargetCount).toBe(expected);
+  });
+
+  it("keeps the sync target independent of safety presets", () => {
+    expect(
+      clampSettings(settings({ preset: "safe", syncTargetCount: 2_000 })).syncTargetCount,
+    ).toBe(2_000);
+    expect(
+      clampSettings(settings({ preset: "balanced", syncTargetCount: 3_000 })).syncTargetCount,
+    ).toBe(3_000);
+  });
+
   it("restores the protective default window when active hours are structurally invalid", () => {
     const notAnObject = clampSettings(
       settings({ activeHours: "09:00-23:00" as unknown as Settings["activeHours"] }),
@@ -308,6 +336,7 @@ describe("default persisted state", () => {
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,
+      syncTargetCount: 1_000,
       activeHours: { enabled: true, start: "09:00", end: "23:00" },
     });
     expect(state.unfollowQueue.status).toBe("idle");

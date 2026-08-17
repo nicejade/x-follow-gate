@@ -10,13 +10,14 @@
  * - one step at a time, each scheduling exactly one successor with a freshly
  *   randomized delay, so there is no periodic timer to fingerprint;
  * - no work at all while the tab is hidden, and a pause once it stays hidden;
- * - three independent round budgets (wall time, steps, silent steps), any of
+ * - a per-round discovery target and a silent-step stall detector, either of
  *   which ends the round.
  *
  * Every capability comes from the injected `ScrollEnvironment`, so the whole
  * state machine is deterministic under test.
  */
 
+import { DEFAULT_SYNC_TARGET_COUNT, HARD_LIMITS } from "@/shared/safety";
 import type { ScrollStatus, SyncPauseReason, SyncStatus } from "@/shared/types";
 
 export interface ScrollEnvironment {
@@ -42,17 +43,10 @@ export interface ScrollLimits {
   maxReverseRatio: number;
   minPauseMs: number;
   maxPauseMs: number;
-  /** Chance that a pause becomes a long "reading" pause. */
-  longPauseProbability: number;
-  minLongPauseMs: number;
-  maxLongPauseMs: number;
   /** How long a hidden tab is tolerated before the round pauses. */
   hiddenGraceMs: number;
   minVisibilityPollMs: number;
   maxVisibilityPollMs: number;
-  /** Round budgets; whichever is reached first ends the round. */
-  maxRoundMs: number;
-  maxSteps: number;
   maxNoGrowthSteps: number;
 }
 
@@ -62,16 +56,11 @@ export const SCROLL_LIMITS: Readonly<ScrollLimits> = Object.freeze({
   reverseProbability: 0.12,
   minReverseRatio: 0.05,
   maxReverseRatio: 0.15,
-  minPauseMs: 1_500,
-  maxPauseMs: 4_000,
-  longPauseProbability: 0.15,
-  minLongPauseMs: 6_000,
-  maxLongPauseMs: 12_000,
+  minPauseMs: 1_000,
+  maxPauseMs: 15_000,
   hiddenGraceMs: 45_000,
   minVisibilityPollMs: 800,
   maxVisibilityPollMs: 1_600,
-  maxRoundMs: 8 * 60_000,
-  maxSteps: 120,
   maxNoGrowthSteps: 5,
 });
 
@@ -83,7 +72,7 @@ export interface ScrollControllerOptions {
 }
 
 export interface ScrollController {
-  start(): void;
+  start(syncTargetCount?: number): void;
   pause(reason: SyncPauseReason): void;
   resume(): void;
   stop(): void;
@@ -94,13 +83,10 @@ export interface ScrollController {
 const FALLBACK_VIEWPORT_HEIGHT = 800;
 
 interface RoundState {
-  startedAt: number | null;
-  /** When the round last entered `running`; `null` while it is not. */
-  resumedAt: number | null;
-  /** Scrolling time already spent. Paused time never counts against the budget. */
-  activeMs: number;
   stepCount: number;
   discoveredCount: number;
+  startDiscoveredCount: number;
+  syncTargetCount: number;
   /** Account count at the last judged forward step. */
   growthBaseline: number;
   noGrowthSteps: number;
@@ -114,11 +100,10 @@ interface RoundState {
 
 function createRound(): RoundState {
   return {
-    startedAt: null,
-    resumedAt: null,
-    activeMs: 0,
     stepCount: 0,
     discoveredCount: 0,
+    startDiscoveredCount: 0,
+    syncTargetCount: DEFAULT_SYNC_TARGET_COUNT,
     growthBaseline: 0,
     noGrowthSteps: 0,
     lastGrowthAt: null,
@@ -188,12 +173,17 @@ export function createScrollController(options: ScrollControllerOptions): Scroll
   }
 
   function scheduleStep(): void {
-    const isLongPause = sample() < limits.longPauseProbability;
+    schedule(between(limits.minPauseMs, limits.maxPauseMs));
+  }
 
-    schedule(
-      isLongPause
-        ? between(limits.minLongPauseMs, limits.maxLongPauseMs)
-        : between(limits.minPauseMs, limits.maxPauseMs),
+  function normalizeSyncTargetCount(value: number | undefined): number {
+    if (!Number.isFinite(value)) {
+      return DEFAULT_SYNC_TARGET_COUNT;
+    }
+
+    return Math.min(
+      HARD_LIMITS.maxSyncTargetCount,
+      Math.max(HARD_LIMITS.minSyncTargetCount, Math.floor(value as number)),
     );
   }
 
@@ -202,26 +192,15 @@ export function createScrollController(options: ScrollControllerOptions): Scroll
     schedule(between(limits.minVisibilityPollMs, limits.maxVisibilityPollMs));
   }
 
-  function elapsedActiveMs(): number {
-    const open = status === "running" && round.resumedAt !== null ? env.now() - round.resumedAt : 0;
-
-    return round.activeMs + Math.max(0, open);
-  }
-
-  /** Leaves `running`, banking the time spent so a pause cannot consume budget. */
+  /** Leaves `running` and clears any pending growth judgment. */
   function suspend(next: SyncStatus, reason: SyncPauseReason | null): void {
     clearTimer();
-    if (status === "running" && round.resumedAt !== null) {
-      round.activeMs += Math.max(0, env.now() - round.resumedAt);
-    }
-
-    round.resumedAt = null;
     round.awaitingGrowth = false;
     status = next;
     pauseReason = reason;
   }
 
-  function start(): void {
+  function start(syncTargetCount?: number): void {
     if (status === "running") {
       return;
     }
@@ -231,11 +210,11 @@ export function createScrollController(options: ScrollControllerOptions): Scroll
     const discovered = readDiscovered();
     round = {
       ...createRound(),
-      startedAt: now,
-      resumedAt: now,
       lastGrowthAt: now,
       discoveredCount: discovered,
+      startDiscoveredCount: discovered,
       growthBaseline: discovered,
+      syncTargetCount: normalizeSyncTargetCount(syncTargetCount),
     };
     status = "running";
     pauseReason = null;
@@ -279,15 +258,13 @@ export function createScrollController(options: ScrollControllerOptions): Scroll
     if (pauseReason === "budget") {
       // Continuing after a spent budget is a new round window, which is exactly
       // what the user asked for; every other pause keeps the round's counters.
-      round.startedAt = now;
-      round.activeMs = 0;
       round.stepCount = 0;
       round.noGrowthSteps = 0;
       round.likelyComplete = false;
       round.lastGrowthAt = now;
+      round.startDiscoveredCount = round.discoveredCount;
     }
 
-    round.resumedAt = now;
     round.hiddenSince = null;
     round.awaitingGrowth = false;
     status = "running";
@@ -393,13 +370,13 @@ export function createScrollController(options: ScrollControllerOptions): Scroll
     round.hiddenSince = null;
     round.discoveredCount = Math.max(round.discoveredCount, readDiscovered());
 
-    if (elapsedActiveMs() >= limits.maxRoundMs || round.stepCount >= limits.maxSteps) {
-      pause("budget");
-
+    if (round.awaitingGrowth && !judgeGrowth()) {
       return;
     }
 
-    if (round.awaitingGrowth && !judgeGrowth()) {
+    if (round.discoveredCount - round.startDiscoveredCount >= round.syncTargetCount) {
+      pause("budget");
+
       return;
     }
 

@@ -216,6 +216,46 @@ function isExtensionMessage(value: unknown): value is ExtensionMessage {
   return isRecord(value) && typeof value.type === "string";
 }
 
+export interface RuntimeMessageHandlerDeps {
+  authProbe: Pick<ReturnType<typeof createAuthProbe>, "probe" | "cancel">;
+  ensureController: () => ScrollController;
+  getController: () => ScrollController | null;
+  onUnfollowOne?: (message: Extract<ExtensionMessage, { type: "UNFOLLOW_ONE" }>) => void;
+}
+
+/** Installs the worker→content command handler. Exported for deterministic tests. */
+export function createRuntimeMessageHandler(
+  deps: RuntimeMessageHandlerDeps,
+): (message: unknown) => void {
+  return (message: unknown) => {
+    if (!isExtensionMessage(message)) {
+      return;
+    }
+
+    switch (message.type) {
+      case "SCROLL_SESSION_START":
+        deps.authProbe.probe();
+        deps.ensureController().start(message.syncTargetCount);
+        break;
+      // Pause and stop can only concern a round that was started here, so they
+      // must never bring a controller into existence.
+      case "SCROLL_SESSION_PAUSE":
+        deps.getController()?.pause(message.reason);
+        break;
+      case "SCROLL_SESSION_STOP":
+        deps.getController()?.stop();
+        // The round is over, so a settle ladder started for it is moot.
+        deps.authProbe.cancel();
+        break;
+      case "UNFOLLOW_ONE":
+        deps.onUnfollowOne?.(message);
+        break;
+      default:
+        break;
+    }
+  };
+}
+
 function createIsolatedRuntime(): void {
   const knownUserIds = new Set<string>();
   let controller: ScrollController | null = null;
@@ -256,37 +296,20 @@ function createIsolatedRuntime(): void {
     },
   });
 
-  chrome.runtime.onMessage.addListener((message: unknown) => {
-    if (!isExtensionMessage(message)) {
-      return;
-    }
-
-    switch (message.type) {
-      case "SCROLL_SESSION_START":
-        authProbe.probe();
-        ensureController().start();
-        break;
-      // Pause and stop can only concern a round that was started here, so they
-      // must never bring a controller into existence.
-      case "SCROLL_SESSION_PAUSE":
-        controller?.pause(message.reason);
-        break;
-      case "SCROLL_SESSION_STOP":
-        controller?.stop();
-        // The round is over, so a settle ladder started for it is moot.
-        authProbe.cancel();
-        break;
-      case "UNFOLLOW_ONE":
+  chrome.runtime.onMessage.addListener(
+    createRuntimeMessageHandler({
+      authProbe,
+      ensureController,
+      getController: () => controller,
+      onUnfollowOne: (message) => {
         void unfollowOne(message.target, createBrowserUnfollowEnvironment(), message.account).then(
           (result) => {
             sendRuntimeMessage({ type: "UNFOLLOW_RESULT", result });
           },
         );
-        break;
-      default:
-        break;
-    }
-  });
+      },
+    }),
+  );
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {

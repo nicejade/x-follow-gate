@@ -24,6 +24,20 @@ Record Chrome version and pass/fail for each item. Do not bulk-unfollow a real a
 7. [ ] 清理 lists only explicit non-followers; whitelist removes a row
 8. [ ] `chrome://extensions` → Service worker **Reload** → Side Panel still shows persisted counts
 
+### Sync scroll budget (settings → insight)
+
+- [ ] “每轮同步人数” defaults to 1000 and persists values from 100 to 5000.
+- [ ] A large Following sync pauses after approximately the configured number of newly discovered accounts.
+- [ ] Successive scroll waits vary within 1–15 seconds.
+- [ ] The round no longer pauses solely at 8 minutes or 120 steps.
+
+### Safety stops (unchanged)
+
+- [ ] Hidden tab ≥45s pauses the round (see item 4 above).
+- [ ] When the Following list stops growing, the round completes with stall copy (not a budget pause).
+- [ ] Auth loss or account switch pauses sync; the panel does not resume on its own.
+- [ ] Sync and unfollow queue are mutually exclusive: starting sync while the queue is running or in cooldown shows a queue-running pause; starting the queue while sync is running is blocked.
+
 ## Write (minimum risk, after read-only passes)
 
 Use Safe preset. Select **exactly one** expendable candidate.

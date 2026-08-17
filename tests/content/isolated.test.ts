@@ -2,9 +2,11 @@ import { FOLLOWING_PAGE_DATA, MESSAGE_SOURCE } from "@/content/bridge-protocol";
 import {
   AUTH_SETTLE_DELAYS_MS,
   createAuthProbe,
+  createRuntimeMessageHandler,
   installFollowingBridge,
   validateFollowingUsers,
 } from "@/content/isolated";
+import type { ScrollController } from "@/content/scroll-controller";
 import { DEFAULT_FOLLOWING_BATCH_LIMITS } from "@/shared/following-batch";
 import type { ExtensionMessage } from "@/shared/messages";
 import type { AccountIdentity, FollowingUser } from "@/shared/types";
@@ -385,5 +387,30 @@ describe("createAuthProbe", () => {
 
     expect(reported).toEqual([null]);
     expect(scheduler.armed).toBe(false);
+  });
+});
+
+describe("createRuntimeMessageHandler", () => {
+  it("forwards syncTargetCount to the scroll controller on SCROLL_SESSION_START", () => {
+    const start = vi.fn();
+    const controller = { start } as Pick<ScrollController, "start"> as ScrollController;
+    const authProbe = createAuthProbe({
+      env: {
+        detect: () => ACCOUNT,
+        schedule: () => 1,
+        cancel: () => {},
+      },
+      report: () => {},
+      settleDelaysMs: [],
+    });
+    const listener = createRuntimeMessageHandler({
+      authProbe,
+      ensureController: () => controller,
+      getController: () => controller,
+    });
+
+    listener({ type: "SCROLL_SESSION_START", syncTargetCount: 1_500 });
+
+    expect(start).toHaveBeenCalledWith(1_500);
   });
 });

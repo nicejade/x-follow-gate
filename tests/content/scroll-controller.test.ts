@@ -8,8 +8,6 @@ const VIEWPORT = 1_000;
 /** Random draws that select a deterministic branch, read as intent in tests. */
 const FORWARD = 0.9;
 const REVERSE = 0;
-const SHORT_PAUSE = 0.9;
-const LONG_PAUSE = 0;
 
 /**
  * Deterministic `ScrollEnvironment`.
@@ -103,9 +101,9 @@ function createFakeEnvironment() {
 
 type Fake = ReturnType<typeof createFakeEnvironment>;
 
-/** Queues the four draws one step consumes: kind, distance, pause kind, pause length. */
-function queueStep(fake: Fake, kind: number, distance = 0.5, pause = SHORT_PAUSE, length = 0.5) {
-  fake.queueRandoms(kind, distance, pause, length);
+/** Queues the three draws one step consumes: direction, distance, next delay. */
+function queueStep(fake: Fake, kind: number, distance = 0.5, delay = 0.5) {
+  fake.queueRandoms(kind, distance, delay);
 }
 
 /** Runs steps until the round leaves `running`, with a hard bound on iterations. */
@@ -168,31 +166,18 @@ describe("createScrollController", () => {
     expect(fake.scrolls[0]).toBeGreaterThan(0);
   });
 
-  it("keeps pauses in the 1.5-4s band and occasionally waits 6-12s", () => {
+  it("waits a freshly randomized 1-15 seconds before every scroll", () => {
     const fake = createFakeEnvironment();
     const controller = createScrollController({ env: fake.env });
+
+    fake.queueRandoms(0);
     controller.start();
+    expect(fake.lastDelay()).toBe(1_000);
 
-    const observed: number[] = [];
-    for (const [pause, length] of [
-      [SHORT_PAUSE, 0],
-      [SHORT_PAUSE, 1],
-      [LONG_PAUSE, 0],
-      [LONG_PAUSE, 1],
-    ] as const) {
-      queueStep(fake, FORWARD, 0.5, pause, length);
-      fake.discover(2);
-      fake.tick();
-      observed.push(fake.lastDelay());
-    }
-
-    expect(observed).toEqual([
-      SCROLL_LIMITS.minPauseMs,
-      SCROLL_LIMITS.maxPauseMs,
-      SCROLL_LIMITS.minLongPauseMs,
-      SCROLL_LIMITS.maxLongPauseMs,
-    ]);
-    expect(controller.getStatus().status).toBe("running");
+    queueStep(fake, FORWARD, 0.5, 1);
+    fake.discover(1);
+    fake.tick();
+    expect(fake.lastDelay()).toBe(15_000);
   });
 
   it("occasionally scrolls slightly backwards and never twice in a row", () => {
@@ -369,36 +354,73 @@ describe("createScrollController", () => {
     expect(controller.getStatus()).toMatchObject({ status: "paused", pauseReason: "user" });
   });
 
-  it("ends the round when the 8-minute budget is spent", () => {
+  it("pauses after discovering the configured number of new accounts", () => {
     const fake = createFakeEnvironment();
     const controller = createScrollController({ env: fake.env });
-    controller.start();
+    fake.discover(40);
+    controller.start(100);
 
-    runUntilRoundEnds(fake, controller, () => {
-      queueStep(fake, FORWARD, 0.5, LONG_PAUSE, 1);
-      fake.discover(5);
-    });
-
-    expect(controller.getStatus()).toMatchObject({ status: "paused", pauseReason: "budget" });
-    expect(controller.getStatus().stepCount).toBeLessThan(SCROLL_LIMITS.maxSteps);
-    expect(controller.getStatus().likelyComplete).toBe(false);
-  });
-
-  it("ends the round after 120 steps", () => {
-    const fake = createFakeEnvironment();
-    const controller = createScrollController({ env: fake.env });
-    controller.start();
-
-    runUntilRoundEnds(fake, controller, () => {
-      queueStep(fake, FORWARD, 0.5, SHORT_PAUSE, 0);
-      fake.discover(5);
-    });
+    for (let step = 0; step < 10 && controller.getStatus().status === "running"; step += 1) {
+      queueStep(fake, FORWARD);
+      fake.discover(10);
+      fake.tick();
+    }
 
     expect(controller.getStatus()).toMatchObject({
       status: "paused",
       pauseReason: "budget",
-      stepCount: SCROLL_LIMITS.maxSteps,
+      discoveredCount: 140,
     });
+    expect(fake.pending).toBeNull();
+  });
+
+  it("clamps a runtime target below 100", () => {
+    const fake = createFakeEnvironment();
+    const controller = createScrollController({ env: fake.env });
+    controller.start(1);
+
+    for (let count = 0; count < 99; count += 1) {
+      queueStep(fake, FORWARD);
+      fake.discover(1);
+      fake.tick();
+    }
+    expect(controller.getStatus().status).toBe("running");
+
+    queueStep(fake, FORWARD);
+    fake.discover(1);
+    fake.tick();
+    expect(controller.getStatus()).toMatchObject({ status: "paused", pauseReason: "budget" });
+  });
+
+  it("does not stop merely because 120 steps or 8 active minutes elapsed", () => {
+    const fake = createFakeEnvironment();
+    const controller = createScrollController({ env: fake.env });
+    controller.start(5_000);
+
+    for (let count = 0; count < 121; count += 1) {
+      queueStep(fake, FORWARD, 0.5, 1);
+      fake.discover(1);
+      fake.tick();
+    }
+
+    expect(controller.getStatus()).toMatchObject({ status: "running", stepCount: 121 });
+  });
+
+  it("uses a fresh discovery baseline for the next round", () => {
+    const fake = createFakeEnvironment();
+    const controller = createScrollController({ env: fake.env });
+
+    for (let round = 0; round < 2; round += 1) {
+      controller.start(100);
+      for (let count = 0; count < 100; count += 1) {
+        queueStep(fake, FORWARD);
+        fake.discover(1);
+        fake.tick();
+      }
+      expect(controller.getStatus()).toMatchObject({ status: "paused", pauseReason: "budget" });
+    }
+
+    expect(controller.getStatus().discoveredCount).toBe(200);
   });
 
   it("ends the round after five steps without new accounts", () => {
@@ -481,13 +503,13 @@ describe("createScrollController", () => {
     expect(fake.lastDelay()).toBeGreaterThanOrEqual(SCROLL_LIMITS.minPauseMs);
   });
 
-  it("does not spend the round budget while paused", () => {
+  it("still scrolls after a long user pause", () => {
     const fake = createFakeEnvironment();
     const controller = createScrollController({ env: fake.env });
     controller.start();
     controller.pause("user");
 
-    fake.advance(SCROLL_LIMITS.maxRoundMs * 2);
+    fake.advance(8 * 60_000);
     controller.resume();
     queueStep(fake, FORWARD);
     fake.discover(1);
@@ -500,11 +522,12 @@ describe("createScrollController", () => {
   it("opens a new round window when the user continues after the budget pause", () => {
     const fake = createFakeEnvironment();
     const controller = createScrollController({ env: fake.env });
-    controller.start();
-    runUntilRoundEnds(fake, controller, () => {
-      queueStep(fake, FORWARD, 0.5, SHORT_PAUSE, 0);
-      fake.discover(5);
-    });
+    controller.start(100);
+    for (let count = 0; count < 100; count += 1) {
+      queueStep(fake, FORWARD);
+      fake.discover(1);
+      fake.tick();
+    }
     expect(controller.getStatus().pauseReason).toBe("budget");
 
     controller.resume();
