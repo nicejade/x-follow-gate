@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { normalizeHandle } from "@/shared/rules";
 import { HARD_LIMITS, clampSettings } from "@/shared/safety";
 import type { ExtensionMessage } from "@/shared/messages";
 import type { ExtensionState, SafetyPreset } from "@/shared/types";
@@ -82,27 +83,55 @@ export function SettingsView({ state, send }: SettingsViewProps) {
             type="button"
             className="min-h-11 rounded-[var(--radius-panel)] border border-border px-3 text-sm"
             onClick={() => {
-              const value = handle.trim();
+              const value = handle.trim().replace(/^@+/, "").trim();
               if (value === "") {
                 return;
               }
-              send({
-                type: "WHITELIST_UPDATE",
-                entries: [...state.whitelist, { handle: value }],
-              });
+              const exists = state.whitelist.some(
+                (entry) => normalizeHandle(entry.handle ?? "") === normalizeHandle(value),
+              );
+              if (!exists) {
+                send({
+                  type: "WHITELIST_UPDATE",
+                  entries: [...state.whitelist, { handle: value }],
+                });
+              }
               setHandle("");
             }}
           >
             添加
           </button>
         </div>
-        <ul className="mt-2 text-sm text-muted">
-          {state.whitelist.map((entry) => (
-            <li key={`${entry.userId ?? ""}-${entry.handle ?? ""}`} className="min-h-11 py-2">
-              {entry.handle ? `@${entry.handle}` : entry.userId}
-            </li>
-          ))}
-        </ul>
+        {state.whitelist.length === 0 ? (
+          <p className="mt-2 text-xs text-muted">暂无白名单成员。</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-border text-sm text-muted">
+            {state.whitelist.map((entry, index) => {
+              const label = entry.handle ? `@${entry.handle}` : (entry.userId ?? "");
+              return (
+                <li
+                  key={`${entry.userId ?? ""}-${entry.handle ?? ""}-${index}`}
+                  className="flex min-h-11 items-center gap-3 py-2"
+                >
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${label}`}
+                    className="min-h-11 px-2 text-xs text-danger"
+                    onClick={() =>
+                      send({
+                        type: "WHITELIST_UPDATE",
+                        entries: state.whitelist.filter((_, position) => position !== index),
+                      })
+                    }
+                  >
+                    移除
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section>

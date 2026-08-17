@@ -209,6 +209,21 @@ describe("Side Panel", () => {
     expect(messages.some((message) => message.type === "WHITELIST_UPDATE")).toBe(true);
   });
 
+  it("removes a whitelist entry from settings", async () => {
+    installChrome(
+      signedInState({ whitelist: [{ handle: "alice" }, { userId: "3", handle: "bob" }] }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "移除 @alice" }));
+
+    const update = messages.find((message) => message.type === "WHITELIST_UPDATE");
+    expect(update).toEqual({
+      type: "WHITELIST_UPDATE",
+      entries: [{ userId: "3", handle: "bob" }],
+    });
+  });
+
   it("shows sync target count in settings with default and helper copy", async () => {
     installChrome(signedInState());
     await renderReadyApp();
