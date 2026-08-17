@@ -15,8 +15,8 @@ If anything looks wrong: **Pause**, wait, reload the extension. Never export coo
 ## Install (unpacked)
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 1. Open `chrome://extensions`
@@ -25,9 +25,7 @@ npm run build
 4. Sign in to [x.com](https://x.com) as usual
 5. Click the Follow Gate action to open the Side Panel
 
-Requires Chrome 114+.
-
-If `npm install` fails with `EACCES` on `~/.npm`, the machine npm cache is not writable. Fix ownership or set `NPM_CONFIG_CACHE` to a user-owned directory.
+Requires Chrome 114+. Requires [pnpm](https://pnpm.io/installation) 10+.
 
 ## How it works
 
@@ -53,12 +51,12 @@ The extension does **not** request `cookies`, `<all_urls>`, or `webRequest`.
 ## Scripts
 
 ```bash
-npm test
-npm run typecheck
-npm run lint
-npm run format:check
-npm run build
-npm run dev          # watch build
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm format:check
+pnpm build
+pnpm dev          # watch build
 ```
 
 ## Recovery
