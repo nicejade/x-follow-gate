@@ -22,6 +22,17 @@ body,
   font-family: var(--font-sans);
 }
 
+button:not(:disabled),
+label:has(input[type="radio"]),
+label:has(input[type="checkbox"]),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 button:focus-visible,
 input:focus-visible,
 a:focus-visible {

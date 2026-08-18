@@ -42,7 +42,7 @@ export function AppShell({ state, tab, onTabChange, now = Date.now(), children }
             key={id}
             type="button"
             onClick={() => onTabChange(id)}
-            className={`min-h-11 text-sm ${
+            className={`min-h-11 text-sm transition-colors hover:text-text ${
               tab === id ? "border-b-2 border-accent text-text" : "text-muted"
             }`}
           >
@@ -51,7 +51,7 @@ export function AppShell({ state, tab, onTabChange, now = Date.now(), children }
         ))}
       </nav>
 
-      <main className="flex-1 px-4 py-4">{children}</main>
+      <main className="flex-1 px-4 py-5">{children}</main>
 
       <footer className="border-t border-border px-4 py-3 text-xs text-muted">
         {PRESET_LABELS[state.settings.preset]} · 今日 {today}/{state.settings.dailyCap}
