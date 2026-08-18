@@ -16,7 +16,8 @@
 
 import type { ExtensionMessage } from "@/shared/messages";
 import { validateFollowingUsers } from "@/shared/following-batch";
-import type { AccountIdentity, FollowingUser } from "@/shared/types";
+import { pickProfileDwellMs } from "@/shared/safety";
+import type { AccountIdentity, FollowingUser, UnfollowResult } from "@/shared/types";
 
 import { detectAccount } from "./auth-detector";
 import { FOLLOWING_PAGE_DATA, MESSAGE_SOURCE } from "./bridge-protocol";
@@ -223,6 +224,23 @@ export interface RuntimeMessageHandlerDeps {
   onUnfollowOne?: (message: Extract<ExtensionMessage, { type: "UNFOLLOW_ONE" }>) => void;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Waits on the profile, then performs one unfollow and reports the outcome. */
+export async function runUnfollowCommand(
+  message: Extract<ExtensionMessage, { type: "UNFOLLOW_ONE" }>,
+  report: (result: UnfollowResult) => void,
+  random: () => number = Math.random,
+): Promise<void> {
+  await sleep(pickProfileDwellMs(random));
+  const result = await unfollowOne(message.target, createBrowserUnfollowEnvironment(), message.account);
+  report(result);
+}
+
 /** Installs the worker→content command handler. Exported for deterministic tests. */
 export function createRuntimeMessageHandler(
   deps: RuntimeMessageHandlerDeps,
@@ -302,11 +320,9 @@ function createIsolatedRuntime(): void {
       ensureController,
       getController: () => controller,
       onUnfollowOne: (message) => {
-        void unfollowOne(message.target, createBrowserUnfollowEnvironment(), message.account).then(
-          (result) => {
-            sendRuntimeMessage({ type: "UNFOLLOW_RESULT", result });
-          },
-        );
+        void runUnfollowCommand(message, (result) => {
+          sendRuntimeMessage({ type: "UNFOLLOW_RESULT", result });
+        });
       },
     }),
   );

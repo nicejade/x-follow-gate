@@ -4,12 +4,20 @@ import {
   createAuthProbe,
   createRuntimeMessageHandler,
   installFollowingBridge,
+  runUnfollowCommand,
   validateFollowingUsers,
 } from "@/content/isolated";
 import type { ScrollController } from "@/content/scroll-controller";
 import { DEFAULT_FOLLOWING_BATCH_LIMITS } from "@/shared/following-batch";
 import type { ExtensionMessage } from "@/shared/messages";
-import type { AccountIdentity, FollowingUser } from "@/shared/types";
+import type { AccountIdentity, FollowingUser, UnfollowResult } from "@/shared/types";
+
+vi.mock("@/content/unfollow-driver", () => ({
+  createBrowserUnfollowEnvironment: vi.fn(() => ({})),
+  unfollowOne: vi.fn(),
+}));
+
+import { unfollowOne } from "@/content/unfollow-driver";
 
 const ORIGIN = "https://x.com";
 const PAGE_TIME = 1_600_000_000_000;
@@ -387,6 +395,44 @@ describe("createAuthProbe", () => {
 
     expect(reported).toEqual([null]);
     expect(scheduler.armed).toBe(false);
+  });
+});
+
+describe("runUnfollowCommand", () => {
+  it("waits on the profile before clicking unfollow", async () => {
+    vi.useFakeTimers();
+    const report = vi.fn();
+    const result: UnfollowResult = {
+      userId: "1",
+      handle: "alice",
+      ok: true,
+      code: "success",
+    };
+    vi.mocked(unfollowOne).mockResolvedValue(result);
+
+    const message = {
+      type: "UNFOLLOW_ONE" as const,
+      target: {
+        userId: "1",
+        handle: "alice",
+        name: "Alice",
+        avatarUrl: null,
+        followedBy: false,
+        syncedAt: 1,
+      },
+      account: { userId: "9", handle: "self" },
+    };
+
+    const promise = runUnfollowCommand(message, report, () => 0);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(unfollowOne).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await promise;
+
+    expect(unfollowOne).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(result);
+    vi.useRealTimers();
   });
 });
 

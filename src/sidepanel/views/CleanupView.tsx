@@ -107,7 +107,7 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
             {hourCount}/{state.settings.hourlyCap} · 会话 {sessionCount}/{state.settings.sessionCap}
           </p>
           <p className="mt-2 text-xs text-muted">
-            将在可见的 x.com 标签页打开目标主页，点击「正在关注」并确认取关。
+            将在可见的 x.com 标签页打开目标主页，停留 5–10 秒后点击取关；每次间隔 10–30 秒。
           </p>
           <div className="mt-3 flex gap-2">
             <button

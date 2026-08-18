@@ -24,7 +24,7 @@ export const COOLDOWN_MS = 60 * MINUTE_MS;
 
 /** Absolute limits; custom settings can never cross them. */
 export const HARD_LIMITS = {
-  minIntervalSec: 60,
+  minIntervalSec: 10,
   maxHourlyCap: 12,
   maxDailyCap: 40,
   maxSessionCap: 20,
@@ -36,15 +36,15 @@ export const DEFAULT_SYNC_TARGET_COUNT = 1_000;
 
 export const PRESET_LIMITS = {
   safe: {
-    intervalMinSec: 90,
-    intervalMaxSec: 150,
+    intervalMinSec: 10,
+    intervalMaxSec: 30,
     hourlyCap: 5,
     dailyCap: 20,
     sessionCap: 10,
   },
   balanced: {
-    intervalMinSec: 75,
-    intervalMaxSec: 120,
+    intervalMinSec: 10,
+    intervalMaxSec: 25,
     hourlyCap: 8,
     dailyCap: 30,
     sessionCap: 15,
@@ -240,25 +240,17 @@ export function pickIntervalMs(settings: Settings, random: () => number = Math.r
   return Math.round((min + (max - min) * sample) * 1000);
 }
 
-/** Shorter first-action delay so a confirmed start feels responsive. */
-export const BOOTSTRAP_INTERVAL = {
-  minSec: 15,
-  maxSec: 30,
+/** Random dwell on a profile before clicking unfollow. */
+export const PROFILE_DWELL = {
+  minSec: 5,
+  maxSec: 10,
 } as const;
 
-export function pickBootstrapIntervalMs(random: () => number = Math.random): number {
-  const { minSec, maxSec } = BOOTSTRAP_INTERVAL;
+export function pickProfileDwellMs(random: () => number = Math.random): number {
+  const { minSec, maxSec } = PROFILE_DWELL;
   const sample = Math.min(1, Math.max(0, random()));
 
   return Math.round((minSec + (maxSec - minSec) * sample) * 1000);
-}
-
-/** True while every queued item is still untouched — the session's first write. */
-export function isFirstActionOfSession(queue: UnfollowQueue): boolean {
-  return (
-    queue.items.length > 0 &&
-    queue.items.every((item) => item.status === "pending" && item.attempts === 0)
-  );
 }
 
 /**

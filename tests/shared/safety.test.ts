@@ -11,6 +11,7 @@ import {
   MINUTE_MS,
   nextActiveWindowStart,
   pickIntervalMs,
+  pickProfileDwellMs,
   purgeExpiredTimestamps,
 } from "@/shared/safety";
 import type { Settings, UnfollowQueue } from "@/shared/types";
@@ -53,7 +54,7 @@ function localTime(hour: number, minute = 0): number {
 describe("hard safety constants", () => {
   it("exposes the P0 floors and ceilings", () => {
     expect(HARD_LIMITS).toEqual({
-      minIntervalSec: 60,
+      minIntervalSec: 10,
       maxHourlyCap: 12,
       maxDailyCap: 40,
       maxSessionCap: 20,
@@ -81,8 +82,8 @@ describe("clampSettings", () => {
     });
 
     expect(result).toMatchObject({
-      intervalMinSec: 60,
-      intervalMaxSec: 60,
+      intervalMinSec: 10,
+      intervalMaxSec: 20,
       hourlyCap: 12,
       dailyCap: 40,
       sessionCap: 20,
@@ -103,8 +104,8 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "safe",
-      intervalMinSec: 90,
-      intervalMaxSec: 150,
+      intervalMinSec: 10,
+      intervalMaxSec: 30,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,
@@ -125,8 +126,8 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "balanced",
-      intervalMinSec: 75,
-      intervalMaxSec: 120,
+      intervalMinSec: 10,
+      intervalMaxSec: 25,
       hourlyCap: 8,
       dailyCap: 30,
       sessionCap: 15,
@@ -174,8 +175,8 @@ describe("clampSettings", () => {
     );
 
     expect(result).toMatchObject({
-      intervalMinSec: 60,
-      intervalMaxSec: 60,
+      intervalMinSec: 10,
+      intervalMaxSec: 10,
       hourlyCap: 1,
       dailyCap: 1,
       sessionCap: 1,
@@ -186,7 +187,7 @@ describe("clampSettings", () => {
     const result = clampSettings(settings({ preset: "aggressive" as Settings["preset"] }));
 
     expect(result.preset).toBe("safe");
-    expect(result.intervalMinSec).toBe(90);
+    expect(result.intervalMinSec).toBe(10);
   });
 
   it("preserves valid active hours and repairs invalid ones", () => {
@@ -313,15 +314,23 @@ describe("pickIntervalMs", () => {
   it("samples uniformly inside the configured band", () => {
     const safe = clampSettings(settings({ preset: "safe" }));
 
-    expect(pickIntervalMs(safe, () => 0)).toBe(90_000);
-    expect(pickIntervalMs(safe, () => 1)).toBe(150_000);
-    expect(pickIntervalMs(safe, () => 0.5)).toBe(120_000);
+    expect(pickIntervalMs(safe, () => 0)).toBe(10_000);
+    expect(pickIntervalMs(safe, () => 1)).toBe(30_000);
+    expect(pickIntervalMs(safe, () => 0.5)).toBe(20_000);
   });
 
   it("never returns a delay below the hard interval floor", () => {
     const unsafe = settings({ intervalMinSec: 1, intervalMaxSec: 2 });
 
-    expect(pickIntervalMs(unsafe, () => 0)).toBe(60_000);
+    expect(pickIntervalMs(unsafe, () => 0)).toBe(10_000);
+  });
+});
+
+describe("pickProfileDwellMs", () => {
+  it("samples uniformly inside the profile dwell band", () => {
+    expect(pickProfileDwellMs(() => 0)).toBe(5_000);
+    expect(pickProfileDwellMs(() => 1)).toBe(10_000);
+    expect(pickProfileDwellMs(() => 0.5)).toBe(7_500);
   });
 });
 
@@ -331,8 +340,8 @@ describe("default persisted state", () => {
 
     expect(state.settings).toEqual({
       preset: "safe",
-      intervalMinSec: 90,
-      intervalMaxSec: 150,
+      intervalMinSec: 10,
+      intervalMaxSec: 30,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,

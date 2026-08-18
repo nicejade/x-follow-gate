@@ -32,9 +32,7 @@ import {
   canRunNext,
   clampSettings,
   COOLDOWN_MS,
-  isFirstActionOfSession,
   isSyncBlockingQueue,
-  pickBootstrapIntervalMs,
   pickIntervalMs,
   purgeExpiredTimestamps,
 } from "@/shared/safety";
@@ -318,16 +316,11 @@ export function planNext(
   }
 
   if (queue.nextAt === null) {
-    // The first action of a session uses a shorter bootstrap delay so a
-    // confirmed start feels responsive; every later action still costs a full
+    // A completed action clears the schedule; the next one always costs a full
     // freshly drawn interval, which is what stops the queue from catching up.
-    const intervalMs = isFirstActionOfSession(queue)
-      ? pickBootstrapIntervalMs(random)
-      : pickIntervalMs(limits, random);
-
     return {
       action: "wait",
-      nextAt: now + intervalMs,
+      nextAt: now + pickIntervalMs(limits, random),
       reason: undefined,
       target,
     };
@@ -801,8 +794,8 @@ export async function runQueueTick(
 
 /**
  * Opens a session and arms the first tick. No unfollow command is sent here: the
- * first write waits for the bootstrap delay, so pressing Start cannot produce a
- * burst. The write tab is brought to the first target immediately so the user
+ * first write waits for the scheduled interval, so pressing Start cannot produce
+ * a burst. The write tab is brought to the first target immediately so the user
  * can see where the queue will act.
  */
 export async function startUnfollowQueue(
