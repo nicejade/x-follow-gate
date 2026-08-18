@@ -32,6 +32,7 @@ import {
   canRunNext,
   clampSettings,
   COOLDOWN_MS,
+  isSyncBlockingQueue,
   pickIntervalMs,
   purgeExpiredTimestamps,
 } from "@/shared/safety";
@@ -41,7 +42,6 @@ import type {
   FollowingUser,
   QueuePauseReason,
   Settings,
-  SyncMeta,
   UnfollowQueue,
   UnfollowQueueItem,
   UnfollowResult,
@@ -113,15 +113,7 @@ export function isUnfollowAlarm(name: string): boolean {
   return name === UNFOLLOW_ALARM_NAME;
 }
 
-/**
- * True while a scroll round still owns the tab.
- *
- * A merely paused round is also blocking: the content controller resumes itself
- * from a `hidden` pause, so only an ended round releases the write path.
- */
-export function isSyncBlockingQueue(syncMeta: SyncMeta): boolean {
-  return syncMeta.status === "running" || syncMeta.status === "paused";
-}
+export { isSyncBlockingQueue };
 
 /**
  * Re-derives the selected ids from live state.

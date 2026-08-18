@@ -6,6 +6,7 @@ import type { ExtensionMessage } from "@/shared/messages";
 import type { ExtensionState, FollowingUser } from "@/shared/types";
 
 const messages: ExtensionMessage[] = [];
+const commandReplies = new Map<ExtensionMessage["type"], unknown>();
 let currentState: ExtensionState;
 let respond: (() => void) | null = null;
 const changeListeners: Array<
@@ -48,12 +49,20 @@ function installChrome(state: ExtensionState, delayResponse = false) {
   messages.length = 0;
   respond = null;
   changeListeners.length = 0;
+  commandReplies.clear();
 
   vi.stubGlobal("chrome", {
     runtime: {
       sendMessage: vi.fn((message: ExtensionMessage, callback?: (response: unknown) => void) => {
         messages.push(message);
         if (message.type !== "STATE_GET") {
+          // The worker answers every command; a refusal travels as a result.
+          // A seeded `undefined` reply stands for a worker that never answered.
+          callback?.(
+            commandReplies.has(message.type)
+              ? commandReplies.get(message.type)
+              : { ok: true, result: { ok: true } },
+          );
           return;
         }
         const payload = { ok: true, result: currentState };
@@ -179,7 +188,80 @@ describe("Side Panel", () => {
     expect(screen.getByText(/无法保证零风险/)).toBeInTheDocument();
     expect(screen.getByText(/档位 安全/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
-    expect(messages).toContainEqual({ type: "QUEUE_START", userIds: ["2"] });
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "QUEUE_START", userIds: ["2"] });
+    });
+  });
+
+  it("starts once a sync round ended at its target count", async () => {
+    installChrome(
+      signedInState({
+        syncMeta: { ...createDefaultState().syncMeta, status: "paused", pauseReason: "budget" },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    expect(screen.getByRole("button", { name: "预览并开始" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "QUEUE_START", userIds: ["2", "3"] });
+    });
+  });
+
+  it("keeps start closed while a hidden pause can resume the scroll round", async () => {
+    installChrome(
+      signedInState({
+        syncMeta: { ...createDefaultState().syncMeta, status: "paused", pauseReason: "hidden" },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    expect(screen.getByRole("button", { name: "预览并开始" })).toBeDisabled();
+    expect(screen.getByText(/请先停止同步再取关/)).toBeInTheDocument();
+  });
+
+  it("explains a refused start instead of doing nothing", async () => {
+    installChrome(signedInState());
+    commandReplies.set("QUEUE_START", { ok: true, result: { ok: false, reason: "sync-running" } });
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/同步仍在进行/)).toBeInTheDocument();
+    });
+  });
+
+  it("reports a worker that never answered", async () => {
+    installChrome(signedInState());
+    commandReplies.set("QUEUE_START", undefined);
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/扩展后台没有响应/)).toBeInTheDocument();
+    });
+  });
+
+  it("ends a paused sync round from the insight view", async () => {
+    installChrome(
+      signedInState({
+        syncMeta: { ...createDefaultState().syncMeta, status: "paused", pauseReason: "hidden" },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "结束本轮" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "SYNC_STOP" });
+    });
   });
 
   it("disables start during cooldown and never offers ignore-and-continue", async () => {

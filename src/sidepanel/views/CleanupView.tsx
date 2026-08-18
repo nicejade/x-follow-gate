@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ConfirmQueueDialog } from "@/sidepanel/components/ConfirmQueueDialog";
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
+import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import { formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
+import { describeOutcome } from "@/sidepanel/lib/outcome";
 import { selectCandidates } from "@/shared/rules";
-import { COOLDOWN_MS, countWithinWindow, HOUR_MS } from "@/shared/safety";
-import type { ExtensionMessage } from "@/shared/messages";
-import type { ExtensionState, FollowingUser } from "@/shared/types";
+import { COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
+import type { ExtensionState, FollowingUser, SyncMeta } from "@/shared/types";
 
 interface CleanupViewProps {
   state: ExtensionState;
-  send: (message: ExtensionMessage) => void;
+  send: SendCommand;
   now?: number;
 }
 
@@ -23,6 +24,7 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
     () => new Set(candidates.map((user) => user.userId)),
   );
   const [confirming, setConfirming] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelected(new Set(candidates.map((user) => user.userId)));
@@ -30,16 +32,12 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
 
   const queue = state.unfollowQueue;
   const running = queue.status === "running";
-  const cooling = queue.status === "cooldown" && (queue.cooldownUntil ?? 0) > now;
-  const syncing = state.syncMeta.status === "running";
+  // Mirrors the worker, which reads the window rather than the status: a
+  // breaker whose window already closed must not keep Start disabled.
+  const cooling = (queue.cooldownUntil ?? 0) > now;
+  const syncBlocking = isSyncBlockingQueue(state.syncMeta);
   const signedIn = state.session.account !== null;
-  const startDisabled =
-    selected.size === 0 ||
-    syncing ||
-    !signedIn ||
-    cooling ||
-    running ||
-    queue.status === "cooldown";
+  const startDisabled = selected.size === 0 || syncBlocking || !signedIn || cooling || running;
 
   const remaining = queue.items.filter(
     (item) => item.status === "pending" || item.status === "in-flight",
@@ -52,6 +50,11 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
     (stamp) => stamp >= (queue.sessionStartedAt ?? 0),
   ).length;
 
+  async function startQueue(userIds: string[]) {
+    setStartError(null);
+    setStartError(describeOutcome(await send({ type: "QUEUE_START", userIds }), START_BLOCK_COPY));
+  }
+
   return (
     <section className="space-y-4">
       <p className="text-sm text-muted">未回关 · 已排除白名单</p>
@@ -61,7 +64,8 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
           {`熔断中：${pauseCopy(queue.pauseReason)}。将于 ${new Date(queue.cooldownUntil ?? now + COOLDOWN_MS).toLocaleString()} 后可再次开始，不会忽略冷却。`}
         </StatusBanner>
       ) : null}
-      {syncing ? <StatusBanner>同步进行中，取关已禁用。</StatusBanner> : null}
+      {syncBlocking ? <StatusBanner>{syncBlockCopy(state.syncMeta)}</StatusBanner> : null}
+      {startError !== null ? <StatusBanner tone="danger">{startError}</StatusBanner> : null}
 
       {running || queue.status === "paused" ? (
         <div className="rounded-[var(--radius-panel)] bg-surface px-3 py-3 text-sm">
@@ -137,13 +141,27 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
           )}
           onCancel={() => setConfirming(false)}
           onConfirm={() => {
-            send({ type: "QUEUE_START", userIds: [...selected] });
             setConfirming(false);
+            void startQueue([...selected]);
           }}
         />
       ) : null}
     </section>
   );
+}
+
+const START_BLOCK_COPY: Record<string, string> = {
+  "auth-required": "未读取到 X 登录状态，请在 x.com 登录后重试。",
+  "queue-active": "已有取关任务在进行中。",
+  cooldown: "仍在安全冷却窗口内，暂时无法开始。",
+  "sync-running": "同步仍在进行，请先在洞察页停止本轮同步。",
+  "no-candidates": "所选账号已不在候选中，可能已回关或被加入白名单。",
+};
+
+function syncBlockCopy(syncMeta: SyncMeta): string {
+  return syncMeta.pauseReason === "hidden"
+    ? "同步已因标签页隐藏暂停，回到该标签后会自动继续；请先停止同步再取关。"
+    : "同步进行中，取关已禁用。";
 }
 
 function pauseCopy(reason: ExtensionState["unfollowQueue"]["pauseReason"]): string {

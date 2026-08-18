@@ -108,11 +108,19 @@ export async function handleMessage(
 
 /**
  * Restores the unfollow alarm after a worker restart without executing a tick.
- * Paused, stopped, and cooldown queues stay idle.
+ * Paused and stopped queues stay idle.
  */
 export async function restoreSchedule(now: number = Date.now()): Promise<void> {
   const state = await loadState();
   const queue = state.unfollowQueue;
+
+  if (queue.status === "cooldown" && queue.cooldownUntil !== null && queue.cooldownUntil > now) {
+    // The breaker has to demote itself when its window closes, even across a
+    // worker restart. Without this alarm the panel would keep reporting a
+    // cooldown that already expired, and Start would stay unavailable.
+    await chrome.alarms.create(UNFOLLOW_ALARM_NAME, { when: queue.cooldownUntil });
+    return;
+  }
 
   if (queue.status !== "running" || queue.nextAt === null) {
     await chrome.alarms.clear(UNFOLLOW_ALARM_NAME);

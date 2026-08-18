@@ -362,12 +362,14 @@ describe("startQueue", () => {
     expect(startQueue(baseState(), [], NOW)).toEqual({ ok: false, reason: "no-candidates" });
   });
 
-  it("refuses to start while a scroll round is running or merely paused", () => {
-    for (const status of ["running", "paused"] as const) {
-      const state = baseState({ syncMeta: syncMeta({ status }) });
+  it("refuses to start while a scroll round can still resume on its own", () => {
+    const running = baseState({ syncMeta: syncMeta({ status: "running" }) });
+    expect(startQueue(running, ["1"], NOW)).toEqual({ ok: false, reason: "sync-running" });
 
-      expect(startQueue(state, ["1"], NOW), status).toEqual({ ok: false, reason: "sync-running" });
-    }
+    const hidden = baseState({
+      syncMeta: syncMeta({ status: "paused", pauseReason: "hidden" }),
+    });
+    expect(startQueue(hidden, ["1"], NOW)).toEqual({ ok: false, reason: "sync-running" });
   });
 
   it("starts once the scroll round has ended", () => {
@@ -375,6 +377,14 @@ describe("startQueue", () => {
       const state = baseState({ syncMeta: syncMeta({ status }) });
 
       expect(startQueue(state, ["1"], NOW).ok, status).toBe(true);
+    }
+  });
+
+  it("starts after a round that only an explicit restart could resume", () => {
+    for (const pauseReason of ["budget", "stalled", "user", "auth"] as const) {
+      const state = baseState({ syncMeta: syncMeta({ status: "paused", pauseReason }) });
+
+      expect(startQueue(state, ["1"], NOW).ok, pauseReason).toBe(true);
     }
   });
 
@@ -428,12 +438,22 @@ describe("startQueue", () => {
 });
 
 describe("isSyncBlockingQueue", () => {
-  it("treats a running or paused round as still owning the tab", () => {
+  it("treats a running round, and only a self-resuming pause, as owning the tab", () => {
     expect(isSyncBlockingQueue(syncMeta({ status: "running" }))).toBe(true);
     expect(isSyncBlockingQueue(syncMeta({ status: "paused", pauseReason: "hidden" }))).toBe(true);
     expect(isSyncBlockingQueue(syncMeta({ status: "idle" }))).toBe(false);
     expect(isSyncBlockingQueue(syncMeta({ status: "completed" }))).toBe(false);
     expect(isSyncBlockingQueue(syncMeta({ status: "stopped" }))).toBe(false);
+  });
+
+  it("releases the tab once the round needs an explicit restart", () => {
+    // `budget` is how a finished round normally ends: reaching the sync target
+    // must not leave the unfollow queue blocked forever.
+    for (const pauseReason of ["budget", "stalled", "user", "auth"] as const) {
+      expect(isSyncBlockingQueue(syncMeta({ status: "paused", pauseReason })), pauseReason).toBe(
+        false,
+      );
+    }
   });
 });
 

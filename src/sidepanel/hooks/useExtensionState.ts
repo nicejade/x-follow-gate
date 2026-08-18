@@ -4,17 +4,48 @@ import { STATE_STORAGE_KEY } from "@/shared/defaults";
 import type { ExtensionMessage } from "@/shared/messages";
 import type { ExtensionState } from "@/shared/types";
 
+/**
+ * Outcome of one command. The worker answers every message, so a command that
+ * the worker refused must reach the panel instead of disappearing: a button
+ * that looks like it worked while nothing happened is worse than an error.
+ */
+export type SendOutcome = { ok: true; result: unknown } | { ok: false; code: string };
+
+export type SendCommand = (message: ExtensionMessage) => Promise<SendOutcome>;
+
 export interface ExtensionController {
   state: ExtensionState | null;
   ready: boolean;
   error: string | null;
-  send: (message: ExtensionMessage) => void;
+  send: SendCommand;
 }
 
 interface Envelope {
   ok?: boolean;
   result?: ExtensionState;
   error?: { code?: string };
+}
+
+/** Never rejects: a transport failure is an outcome the caller has to render. */
+function sendCommand(message: ExtensionMessage): Promise<SendOutcome> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(message, (response: Envelope | undefined) => {
+        if (chrome.runtime.lastError || response === undefined) {
+          resolve({ ok: false, code: "worker-unreachable" });
+          return;
+        }
+
+        resolve(
+          response.ok === true
+            ? { ok: true, result: response.result }
+            : { ok: false, code: response.error?.code ?? "internal-error" },
+        );
+      });
+    } catch {
+      resolve({ ok: false, code: "worker-unreachable" });
+    }
+  });
 }
 
 export function useExtensionState(): ExtensionController {
@@ -70,8 +101,6 @@ export function useExtensionState(): ExtensionController {
     state,
     ready,
     error,
-    send: (message) => {
-      chrome.runtime.sendMessage(message);
-    },
+    send: sendCommand,
   };
 }

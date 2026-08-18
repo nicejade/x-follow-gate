@@ -11,6 +11,7 @@ import type {
   QuotaDecision,
   SafetyPreset,
   Settings,
+  SyncMeta,
   UnfollowQueue,
 } from "./types";
 
@@ -152,6 +153,26 @@ export function clampSettings(settings: Settings): Settings {
     syncTargetCount,
     activeHours,
   };
+}
+
+/**
+ * True while a scroll round still owns the tab, which excludes the write path.
+ *
+ * Only a round that can come back without the user keeps the queue out: the
+ * content controller polls itself back from a `hidden` pause, so a tab that
+ * becomes visible again would scroll while the queue writes. Every other pause
+ * ends the round until an explicit start, and `budget` — the way a finished
+ * round normally ends — is one of them, so reaching the sync target must not
+ * leave the queue permanently blocked.
+ *
+ * The side panel disables Start on exactly this predicate, so the panel can
+ * never offer an action the worker would refuse.
+ */
+export function isSyncBlockingQueue(syncMeta: SyncMeta): boolean {
+  return (
+    syncMeta.status === "running" ||
+    (syncMeta.status === "paused" && syncMeta.pauseReason === "hidden")
+  );
 }
 
 export function countWithinWindow(timestamps: number[], now: number, windowMs: number): number {

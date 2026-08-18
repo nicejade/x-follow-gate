@@ -1,13 +1,13 @@
 import { useState } from "react";
 
+import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import { normalizeHandle } from "@/shared/rules";
 import { HARD_LIMITS, clampSettings } from "@/shared/safety";
-import type { ExtensionMessage } from "@/shared/messages";
 import type { ExtensionState, SafetyPreset } from "@/shared/types";
 
 interface SettingsViewProps {
   state: ExtensionState;
-  send: (message: ExtensionMessage) => void;
+  send: SendCommand;
 }
 
 export function SettingsView({ state, send }: SettingsViewProps) {
