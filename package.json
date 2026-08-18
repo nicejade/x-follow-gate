@@ -1,6 +1,6 @@
 {
   "name": "x-follow-gate",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Local-only Chrome MV3 extension that analyses X following relationships and cleans up non-followers through a conservative queue.",
   "type": "module",

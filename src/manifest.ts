@@ -1,7 +1,7 @@
 export const manifest: chrome.runtime.ManifestV3 = {
   manifest_version: 3,
   name: "Follow Gate",
-  version: "0.2.0",
+  version: "1.0.0",
   description: "本地分析 X 关注关系，并以保守队列清理未回关账号。",
   minimum_chrome_version: "114",
   permissions: ["storage", "alarms", "sidePanel", "tabs", "scripting"],
