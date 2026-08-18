@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
@@ -6,8 +7,10 @@ import { build, defineConfig, type Plugin } from "vite";
 
 import { manifest } from "./src/manifest.ts";
 
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
 const outDir = fileURLToPath(new URL("./dist", import.meta.url));
+const extensionIconPath = `${rootDir}/x.png`;
 
 /**
  * Content scripts are injected as classic scripts, so each one must be a
@@ -26,6 +29,11 @@ function emitManifest(): Plugin {
         type: "asset",
         fileName: "manifest.json",
         source: `${JSON.stringify(manifest, null, 2)}\n`,
+      });
+      this.emitFile({
+        type: "asset",
+        fileName: "x.png",
+        source: readFileSync(extensionIconPath),
       });
     },
   };
