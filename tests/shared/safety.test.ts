@@ -54,7 +54,7 @@ function localTime(hour: number, minute = 0): number {
 describe("hard safety constants", () => {
   it("exposes the P0 floors and ceilings", () => {
     expect(HARD_LIMITS).toEqual({
-      minIntervalSec: 10,
+      minIntervalSec: 2,
       maxHourlyCap: 12,
       maxDailyCap: 40,
       maxSessionCap: 20,
@@ -82,7 +82,7 @@ describe("clampSettings", () => {
     });
 
     expect(result).toMatchObject({
-      intervalMinSec: 10,
+      intervalMinSec: 2,
       intervalMaxSec: 20,
       hourlyCap: 12,
       dailyCap: 40,
@@ -104,8 +104,8 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "safe",
-      intervalMinSec: 10,
-      intervalMaxSec: 30,
+      intervalMinSec: 2,
+      intervalMaxSec: 10,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,
@@ -126,8 +126,8 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "balanced",
-      intervalMinSec: 10,
-      intervalMaxSec: 25,
+      intervalMinSec: 2,
+      intervalMaxSec: 10,
       hourlyCap: 8,
       dailyCap: 30,
       sessionCap: 15,
@@ -175,8 +175,8 @@ describe("clampSettings", () => {
     );
 
     expect(result).toMatchObject({
-      intervalMinSec: 10,
-      intervalMaxSec: 10,
+      intervalMinSec: 2,
+      intervalMaxSec: 2,
       hourlyCap: 1,
       dailyCap: 1,
       sessionCap: 1,
@@ -187,7 +187,7 @@ describe("clampSettings", () => {
     const result = clampSettings(settings({ preset: "aggressive" as Settings["preset"] }));
 
     expect(result.preset).toBe("safe");
-    expect(result.intervalMinSec).toBe(10);
+    expect(result.intervalMinSec).toBe(2);
   });
 
   it("preserves valid active hours and repairs invalid ones", () => {
@@ -207,7 +207,7 @@ describe("clampSettings", () => {
       settings({ activeHours: undefined as unknown as Settings["activeHours"] }),
     );
 
-    expect(missing.activeHours).toEqual({ enabled: true, start: "09:00", end: "23:00" });
+    expect(missing.activeHours).toEqual({ enabled: false, start: "09:00", end: "23:00" });
   });
 
   it("defaults the sync target to 1000", () => {
@@ -238,17 +238,17 @@ describe("clampSettings", () => {
     const notAnObject = clampSettings(
       settings({ activeHours: "09:00-23:00" as unknown as Settings["activeHours"] }),
     );
-    expect(notAnObject.activeHours).toEqual({ enabled: true, start: "09:00", end: "23:00" });
+    expect(notAnObject.activeHours).toEqual({ enabled: false, start: "09:00", end: "23:00" });
 
     const empty = clampSettings(settings({ activeHours: {} as Settings["activeHours"] }));
-    expect(empty.activeHours).toEqual({ enabled: true, start: "09:00", end: "23:00" });
+    expect(empty.activeHours).toEqual({ enabled: false, start: "09:00", end: "23:00" });
 
     const missingFlag = clampSettings(
       settings({
         activeHours: { start: "10:00", end: "20:00" } as unknown as Settings["activeHours"],
       }),
     );
-    expect(missingFlag.activeHours).toEqual({ enabled: true, start: "10:00", end: "20:00" });
+    expect(missingFlag.activeHours).toEqual({ enabled: false, start: "10:00", end: "20:00" });
   });
 });
 
@@ -314,23 +314,23 @@ describe("pickIntervalMs", () => {
   it("samples uniformly inside the configured band", () => {
     const safe = clampSettings(settings({ preset: "safe" }));
 
-    expect(pickIntervalMs(safe, () => 0)).toBe(10_000);
-    expect(pickIntervalMs(safe, () => 1)).toBe(30_000);
-    expect(pickIntervalMs(safe, () => 0.5)).toBe(20_000);
+    expect(pickIntervalMs(safe, () => 0)).toBe(2_000);
+    expect(pickIntervalMs(safe, () => 1)).toBe(10_000);
+    expect(pickIntervalMs(safe, () => 0.5)).toBe(6_000);
   });
 
   it("never returns a delay below the hard interval floor", () => {
     const unsafe = settings({ intervalMinSec: 1, intervalMaxSec: 2 });
 
-    expect(pickIntervalMs(unsafe, () => 0)).toBe(10_000);
+    expect(pickIntervalMs(unsafe, () => 0)).toBe(2_000);
   });
 });
 
 describe("pickProfileDwellMs", () => {
   it("samples uniformly inside the profile dwell band", () => {
-    expect(pickProfileDwellMs(() => 0)).toBe(5_000);
+    expect(pickProfileDwellMs(() => 0)).toBe(2_000);
     expect(pickProfileDwellMs(() => 1)).toBe(10_000);
-    expect(pickProfileDwellMs(() => 0.5)).toBe(7_500);
+    expect(pickProfileDwellMs(() => 0.5)).toBe(6_000);
   });
 });
 
@@ -340,13 +340,13 @@ describe("default persisted state", () => {
 
     expect(state.settings).toEqual({
       preset: "safe",
-      intervalMinSec: 10,
-      intervalMaxSec: 30,
+      intervalMinSec: 2,
+      intervalMaxSec: 10,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,
       syncTargetCount: 1_000,
-      activeHours: { enabled: true, start: "09:00", end: "23:00" },
+      activeHours: { enabled: false, start: "09:00", end: "23:00" },
     });
     expect(state.unfollowQueue.status).toBe("idle");
     expect(state.unfollowQueue.actionTimestamps).toEqual([]);
@@ -361,12 +361,12 @@ describe("default persisted state", () => {
 
   it("returns independent copies that cannot corrupt the shared defaults", () => {
     const first = createDefaultState();
-    first.settings.activeHours.enabled = false;
+    first.settings.activeHours.enabled = true;
     first.unfollowQueue.actionTimestamps.push(1);
 
     const second = createDefaultState();
 
-    expect(second.settings.activeHours.enabled).toBe(true);
+    expect(second.settings.activeHours.enabled).toBe(false);
     expect(second.unfollowQueue.actionTimestamps).toEqual([]);
   });
 });
@@ -517,15 +517,14 @@ describe("canRunNext", () => {
     expect(decision).toMatchObject({ allowed: false, reason: "session-cap" });
   });
 
-  it("enforces the default window when the caller passes broken active hours", () => {
+  it("treats broken active hours as an open window", () => {
     const decision = canRunNext(
       queue(),
       localTime(3),
       settings({ activeHours: undefined as unknown as Settings["activeHours"] }),
     );
 
-    expect(decision).toMatchObject({ allowed: false, reason: "outside-active-hours" });
-    expect(decision.retryAt).toBe(localTime(9));
+    expect(decision.allowed).toBe(true);
   });
 
   it("applies Safe caps when no settings are supplied", () => {

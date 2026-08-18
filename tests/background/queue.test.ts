@@ -1,7 +1,6 @@
 import {
   applyUnfollowResult,
   dismissQueueCooldown,
-  dismissUnfollowCooldown,
   enforceQueueOwner,
   FAILURE_BREAKER_THRESHOLD,
   isSyncBlockingQueue,
@@ -25,7 +24,7 @@ import {
 import { isQueueBlockingSync } from "@/background/sync-coordinator";
 import { createDefaultState, STATE_STORAGE_KEY } from "@/shared/defaults";
 import type { ExtensionMessage } from "@/shared/messages";
-import { COOLDOWN_MS, DAY_MS, HOUR_MS, MINUTE_MS } from "@/shared/safety";
+import { COOLDOWN_MS, DAY_MS, HOUR_MS, MINUTE_MS, UNFOLLOW_WATCHDOG_MS } from "@/shared/safety";
 import type {
   ExtensionState,
   FollowingUser,
@@ -44,8 +43,7 @@ function localTime(hour: number, minute = 0): number {
 
 const NOW = localTime(12);
 const OWNER = { userId: "9", handle: "self" };
-const SAFE_MIN_MS = 10_000;
-const SAFE_MAX_MS = 30_000;
+const WATCHDOG_MS = UNFOLLOW_WATCHDOG_MS;
 
 function user(overrides: Partial<FollowingUser> = {}): FollowingUser {
   return {
@@ -116,7 +114,7 @@ function inFlightState(overrides: Partial<UnfollowQueue> = {}): ExtensionState {
   return baseState({
     unfollowQueue: runningQueue({
       items: [item({ status: "in-flight", attempts: 1 }), item({ userId: "2", handle: "bob" })],
-      nextAt: NOW + SAFE_MIN_MS,
+      nextAt: NOW + WATCHDOG_MS,
       ...overrides,
     }),
   });
@@ -460,18 +458,17 @@ describe("isSyncBlockingQueue", () => {
 });
 
 describe("planNext", () => {
-  it("holds one interval before the first unfollow of a session", () => {
+  it("dispatches the first unfollow immediately so the profile dwell is the only wait", () => {
     const plan = planNext(runningQueue({ nextAt: null }), settings(), NOW, () => 0);
 
     expect(plan).toEqual({
-      action: "wait",
-      nextAt: NOW + SAFE_MIN_MS,
-      reason: undefined,
+      action: "execute",
+      nextAt: NOW + WATCHDOG_MS,
       target: item(),
     });
   });
 
-  it("holds the full preset interval before the next unfollow after one completes", () => {
+  it("dispatches the next unfollow immediately after one completes", () => {
     const plan = planNext(
       runningQueue({
         nextAt: null,
@@ -486,68 +483,25 @@ describe("planNext", () => {
     );
 
     expect(plan).toEqual({
-      action: "wait",
-      nextAt: NOW + SAFE_MIN_MS,
-      reason: undefined,
+      action: "execute",
+      nextAt: NOW + WATCHDOG_MS,
       target: item({ userId: "2", handle: "bob", status: "pending" }),
     });
   });
 
-  it("draws the interval inside the Safe band", () => {
+  it("arms a fixed watchdog rather than sampling the interval band", () => {
     const band = [0, 0.5, 1].map(
       (sample) => planNext(runningQueue({ nextAt: null }), settings(), NOW, () => sample).nextAt,
     );
 
-    expect(band).toEqual([NOW + SAFE_MIN_MS, NOW + 20_000, NOW + SAFE_MAX_MS]);
+    expect(band).toEqual([NOW + WATCHDOG_MS, NOW + WATCHDOG_MS, NOW + WATCHDOG_MS]);
   });
 
-  it("draws the full preset band after the first action completes", () => {
-    const queue = runningQueue({
-      nextAt: null,
-      items: [item({ status: "done" }), item({ userId: "2", handle: "bob", status: "pending" })],
-    });
-    const band = [0, 0.5, 1].map(
-      (sample) => planNext(queue, settings(), NOW, () => sample).nextAt,
-    );
+  it("does not defer the first unfollow overnight on the default settings", () => {
+    const night = localTime(23, 30);
+    const plan = planNext(runningQueue({ nextAt: null }), settings(), night, () => 0);
 
-    expect(band).toEqual([NOW + SAFE_MIN_MS, NOW + 20_000, NOW + SAFE_MAX_MS]);
-  });
-
-  it("draws the Balanced band for the first action", () => {
-    const balanced = settings({
-      preset: "balanced",
-      intervalMinSec: 10,
-      intervalMaxSec: 25,
-      hourlyCap: 8,
-      dailyCap: 30,
-      sessionCap: 15,
-    });
-
-    const band = [0, 1].map(
-      (sample) => planNext(runningQueue({ nextAt: null }), balanced, NOW, () => sample).nextAt,
-    );
-
-    expect(band).toEqual([NOW + 10_000, NOW + 25_000]);
-  });
-
-  it("clamps a custom interval to the hard floor", () => {
-    const custom = settings({ preset: "custom", intervalMinSec: 5, intervalMaxSec: 10 });
-
-    const plan = planNext(runningQueue({ nextAt: null }), custom, NOW, () => 0);
-
-    expect(plan.nextAt).toBe(NOW + 10_000);
-  });
-
-  it("re-applies the preset band after the first action completes", () => {
-    const tampered = settings({ intervalMinSec: 1, intervalMaxSec: 2 });
-    const queueAfterFirst = runningQueue({
-      nextAt: null,
-      items: [item({ status: "done" }), item({ userId: "2", handle: "bob", status: "pending" })],
-    });
-
-    const plan = planNext(queueAfterFirst, tampered, NOW, () => 0);
-
-    expect(plan.nextAt).toBe(NOW + SAFE_MIN_MS);
+    expect(plan).toMatchObject({ action: "execute", nextAt: night + WATCHDOG_MS });
   });
 
   it("executes the first pending item once the schedule is due", () => {
@@ -556,10 +510,10 @@ describe("planNext", () => {
     expect(plan).toMatchObject({ action: "execute", target: item() });
   });
 
-  it("arms the next schedule when it hands out an execution", () => {
+  it("arms the watchdog when it hands out an execution", () => {
     const plan = planNext(runningQueue({ nextAt: NOW }), settings(), NOW, () => 0);
 
-    expect(plan.nextAt).toBe(NOW + SAFE_MIN_MS);
+    expect(plan.nextAt).toBe(NOW + WATCHDOG_MS);
   });
 
   it("never executes before the persisted schedule", () => {
@@ -636,7 +590,12 @@ describe("planNext", () => {
   it("holds outside the active-hours window and points at the next opening", () => {
     const night = localTime(3);
 
-    const plan = planNext(runningQueue({ nextAt: night }), settings(), night, () => 0);
+    const plan = planNext(
+      runningQueue({ nextAt: night }),
+      settings({ activeHours: { enabled: true, start: "09:00", end: "23:00" } }),
+      night,
+      () => 0,
+    );
 
     expect(plan).toMatchObject({
       action: "wait",
@@ -743,8 +702,8 @@ describe("recordResult", () => {
 
     expect(next.unfollowQueue.nextAt).toBeNull();
     expect(planNext(next.unfollowQueue, next.settings, NOW, () => 0)).toMatchObject({
-      action: "wait",
-      nextAt: NOW + SAFE_MIN_MS,
+      action: "execute",
+      nextAt: NOW + WATCHDOG_MS,
     });
   });
 
@@ -887,7 +846,7 @@ describe("recordResult", () => {
     expect(second.unfollowQueue.cursor).toBe(1);
   });
 
-  it("does not shorten the interval after a failure", () => {
+  it("retries a failed item immediately; the profile dwell is the gap", () => {
     const failed = recordResult(
       inFlightState(),
       result({ ok: false, code: "control-missing" }),
@@ -895,8 +854,8 @@ describe("recordResult", () => {
     );
 
     expect(planNext(failed.unfollowQueue, failed.settings, NOW, () => 0)).toMatchObject({
-      action: "wait",
-      nextAt: NOW + SAFE_MIN_MS,
+      action: "execute",
+      nextAt: NOW + WATCHDOG_MS,
     });
   });
 
@@ -1168,31 +1127,34 @@ describe("isUnfollowAlarm", () => {
 });
 
 describe("startUnfollowQueue", () => {
-  it("persists the session and arms the first tick without writing anything to X", async () => {
+  it("persists the session and dispatches the first unfollow", async () => {
     chromeMock.seed(baseState());
 
-    const outcome = await startUnfollowQueue(["1", "2"], NOW, () => 0);
+    const outcome = await startUnfollowQueue(["1", "2"], NOW, () => 0, routeOptions);
 
     expect(outcome).toMatchObject({
       ok: true,
-      plan: { action: "wait", nextAt: NOW + SAFE_MIN_MS },
+      plan: { action: "execute", nextAt: NOW + WATCHDOG_MS },
     });
     expect(chromeMock.persistedQueue()).toMatchObject({
       status: "running",
-      nextAt: NOW + SAFE_MIN_MS,
+      nextAt: NOW + WATCHDOG_MS,
       ownerUserId: OWNER.userId,
+      items: [{ userId: "1", status: "in-flight" }, { userId: "2", status: "pending" }],
     });
-    expect(chromeMock.messages).toEqual([]);
-    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + SAFE_MIN_MS);
+    expect(chromeMock.messages).toEqual([
+      { tabId: 7, message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER } },
+    ]);
+    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + WATCHDOG_MS);
   });
 
   it("persists nextAt before the alarm is created", async () => {
     chromeMock.seed(baseState());
 
-    await startUnfollowQueue(["1"], NOW, () => 0);
+    await startUnfollowQueue(["1"], NOW, () => 0, routeOptions);
 
     const persistIndex = chromeMock.order.findIndex((entry) =>
-      entry.startsWith(`persist:status=running,nextAt=${NOW + SAFE_MIN_MS}`),
+      entry.startsWith(`persist:status=running,nextAt=${NOW + WATCHDOG_MS}`),
     );
     const alarmIndex = chromeMock.order.findIndex((entry) => entry.startsWith("alarm:"));
 
@@ -1247,10 +1209,10 @@ describe("runQueueTick", () => {
     await runQueueTick(NOW, () => 0, routeOptions);
 
     const persistIndex = chromeMock.order.findIndex((entry) =>
-      entry.startsWith(`persist:status=running,nextAt=${NOW + SAFE_MIN_MS}`),
+      entry.startsWith(`persist:status=running,nextAt=${NOW + WATCHDOG_MS}`),
     );
     const alarmIndex = chromeMock.order.indexOf(
-      `alarm:${UNFOLLOW_ALARM_NAME}@${NOW + SAFE_MIN_MS}`,
+      `alarm:${UNFOLLOW_ALARM_NAME}@${NOW + WATCHDOG_MS}`,
     );
     const sendIndex = chromeMock.order.indexOf("send:UNFOLLOW_ONE");
 
@@ -1412,13 +1374,21 @@ describe("runQueueTick", () => {
       status: "failed",
       lastCode: "verification-failed",
     });
-    expect(plan).toMatchObject({ action: "wait", nextAt: NOW + SAFE_MIN_MS });
-    expect(chromeMock.messages).toEqual([]);
+    expect(plan).toMatchObject({
+      action: "execute",
+      target: item({ userId: "2", handle: "bob" }),
+    });
+    expect(chromeMock.messages).toEqual([
+      {
+        tabId: 7,
+        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
+      },
+    ]);
   });
 });
 
 describe("applyUnfollowResult", () => {
-  it("records the result and schedules the next attempt one full interval later", async () => {
+  it("records the result and immediately starts the next target", async () => {
     chromeMock.seed(inFlightState());
 
     const plan = await applyUnfollowResult(result(), NOW, () => 0, routeOptions);
@@ -1426,14 +1396,19 @@ describe("applyUnfollowResult", () => {
     expect(chromeMock.persistedQueue()).toMatchObject({
       items: [
         { userId: "1", status: "done" },
-        { userId: "2", status: "pending" },
+        { userId: "2", status: "in-flight" },
       ],
       actionTimestamps: [NOW],
-      nextAt: NOW + SAFE_MIN_MS,
+      nextAt: NOW + WATCHDOG_MS,
     });
-    expect(plan).toMatchObject({ action: "wait", nextAt: NOW + SAFE_MIN_MS });
-    expect(chromeMock.messages).toEqual([]);
-    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + SAFE_MIN_MS);
+    expect(plan).toMatchObject({ action: "execute" });
+    expect(chromeMock.messages).toEqual([
+      {
+        tabId: 7,
+        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
+      },
+    ]);
+    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + WATCHDOG_MS);
   });
 
   it("audits a breaker result and leaves the queue asleep", async () => {
@@ -1474,49 +1449,40 @@ describe("applyUnfollowResult", () => {
 });
 
 describe("a full session", () => {
-  it("walks two targets one at a time, never faster than the interval band", async () => {
+  it("walks two targets one at a time, dwelling on each profile before the click", async () => {
     chromeMock.seed(baseState());
 
     await startUnfollowQueue(["1", "2"], NOW, () => 0, routeOptions);
-    expect(chromeMock.messages).toEqual([]);
-
-    const firstDue = NOW + SAFE_MIN_MS;
-    await runQueueTick(firstDue, () => 0, routeOptions);
-    expect(chromeMock.messages).toHaveLength(1);
+    expect(chromeMock.messages.map((entry) => entry.message)).toEqual([
+      { type: "UNFOLLOW_ONE", target: user(), account: OWNER },
+    ]);
+    expect(chromeMock.persistedQueue().items[0]).toMatchObject({ status: "in-flight" });
 
     // A second tick while the first command is outstanding must stay silent.
-    await runQueueTick(firstDue + 1_000, () => 0, routeOptions);
+    await runQueueTick(NOW + 1_000, () => 0, routeOptions);
     expect(chromeMock.messages).toHaveLength(1);
 
-    await applyUnfollowResult(result(), firstDue + 2_000, () => 0, routeOptions);
-    const secondDue = firstDue + 2_000 + SAFE_MIN_MS;
-    expect(chromeMock.persistedQueue().nextAt).toBe(secondDue);
-
-    // Still nothing before the schedule, even when a tick arrives early.
-    await runQueueTick(secondDue - 1, () => 0, routeOptions);
-    expect(chromeMock.messages).toHaveLength(1);
-
-    await runQueueTick(secondDue, () => 0, routeOptions);
+    const firstDoneAt = NOW + 2_000;
+    await applyUnfollowResult(result(), firstDoneAt, () => 0, routeOptions);
     expect(chromeMock.messages.map((entry) => entry.message)).toEqual([
       { type: "UNFOLLOW_ONE", target: user(), account: OWNER },
       { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
     ]);
+    expect(chromeMock.persistedQueue().nextAt).toBe(firstDoneAt + WATCHDOG_MS);
 
+    const secondDoneAt = firstDoneAt + 1_000;
     await applyUnfollowResult(
       result({ userId: "2", handle: "bob" }),
-      secondDue + 1_000,
+      secondDoneAt,
       () => 0,
       routeOptions,
     );
 
-    const finished = await runQueueTick(secondDue + 2_000, () => 0, routeOptions);
+    const finished = await runQueueTick(secondDoneAt + 1_000, () => 0, routeOptions);
     expect(finished).toEqual({ action: "complete", nextAt: null });
     expect(chromeMock.persistedQueue()).toMatchObject({ status: "completed", nextAt: null });
     expect(chromeMock.persisted().auditLog).toHaveLength(2);
-    expect(chromeMock.persistedQueue().actionTimestamps).toEqual([
-      firstDue + 2_000,
-      secondDue + 1_000,
-    ]);
+    expect(chromeMock.persistedQueue().actionTimestamps).toEqual([firstDoneAt, secondDoneAt]);
   });
 });
 

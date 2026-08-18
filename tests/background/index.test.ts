@@ -134,7 +134,7 @@ describe("background listeners", () => {
     await vi.waitFor(() => {
       expect(sendResponse).toHaveBeenCalledWith({
         ok: true,
-        result: expect.objectContaining({ version: 1 }),
+        result: expect.objectContaining({ version: 2 }),
       });
     });
   });

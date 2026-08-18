@@ -1,4 +1,5 @@
 import type { SendOutcome } from "@/sidepanel/hooks/useExtensionState";
+import { PROFILE_DWELL } from "@/shared/safety";
 
 /**
  * Transport-level failures. These are the same for every command: the panel
@@ -66,9 +67,19 @@ export function describeQueueStart(
     return { error: null, success: null };
   }
 
-  const { ok, plan } = result as { ok?: unknown; plan?: { nextAt?: number | null } };
+  const { ok, plan } = result as {
+    ok?: unknown;
+    plan?: { action?: string; nextAt?: number | null };
+  };
   if (ok !== true) {
     return { error: null, success: null };
+  }
+
+  if (plan?.action === "execute") {
+    return {
+      error: null,
+      success: `队列已启动。已打开首个目标主页，将在 ${PROFILE_DWELL.minSec}–${PROFILE_DWELL.maxSec} 秒内执行第一次取关。`,
+    };
   }
 
   const seconds =

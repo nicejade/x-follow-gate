@@ -66,8 +66,11 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
     (item) => item.status === "pending" || item.status === "in-flight",
   );
   const current = queue.items.find((item) => item.status === "in-flight") ?? remaining[0];
+  const inFlight = current?.status === "in-flight";
   const countdown =
-    queue.nextAt !== null && queue.nextAt > now ? Math.ceil((queue.nextAt - now) / 1000) : 0;
+    !inFlight && queue.nextAt !== null && queue.nextAt > now
+      ? Math.ceil((queue.nextAt - now) / 1000)
+      : 0;
   const hourCount = countWithinWindow(queue.actionTimestamps, now, HOUR_MS);
   const sessionCount = queue.actionTimestamps.filter(
     (stamp) => stamp >= (queue.sessionStartedAt ?? 0),
@@ -153,7 +156,7 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
             {hourCount}/{state.settings.hourlyCap} · 会话 {sessionCount}/{state.settings.sessionCap}
           </p>
           <p className="mt-2 text-xs text-muted">
-            将在可见的 x.com 标签页打开目标主页，停留 5–10 秒后点击取关；每次间隔 10–30 秒。
+            将在可见的 x.com 标签页打开目标主页，停留 2–10 秒后点击取关；每项间隔 2–10 秒。
           </p>
           <div className="mt-3 flex gap-2">
             <button

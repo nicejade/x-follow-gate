@@ -65,7 +65,7 @@ function installChrome(state: ExtensionState, delayResponse = false) {
                   ok: true,
                   result: {
                     ok: true,
-                    plan: { action: "wait", nextAt: Date.now() + 20_000 },
+                    plan: { action: "execute", nextAt: Date.now() + 30_000 },
                   },
                 },
           );
@@ -252,7 +252,7 @@ describe("Side Panel", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/队列已启动/)).toBeInTheDocument();
-      expect(screen.getByText(/秒后执行第一次取关/)).toBeInTheDocument();
+      expect(screen.getByText(/将在 2–10 秒内执行第一次取关/)).toBeInTheDocument();
     });
   });
 

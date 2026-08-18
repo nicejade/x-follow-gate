@@ -424,7 +424,7 @@ describe("runUnfollowCommand", () => {
     };
 
     const promise = runUnfollowCommand(message, report, () => 0);
-    await vi.advanceTimersByTimeAsync(4_999);
+    await vi.advanceTimersByTimeAsync(1_999);
     expect(unfollowOne).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);

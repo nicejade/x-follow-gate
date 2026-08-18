@@ -11,8 +11,9 @@
  * - **Schedule first.** `nextAt` is persisted before the alarm is armed and
  *   before any command is sent, so a worker that dies mid-tick wakes up with a
  *   schedule that is at least as conservative as the one it planned.
- * - **Never early.** An execution requires `now >= nextAt`, quota headroom, and
- *   an open active-hours window. Nothing shortens an interval that was drawn.
+ * - **Never early.** An execution requires `now >= nextAt` (when one is set),
+ *   quota headroom, and an open active-hours window. The 2–10s gap between
+ *   clicks is the profile dwell, not a background interval.
  * - **One owner.** The account that started the session must still be the signed-in
  *   account. `null` or a different account stops the queue; a new account is
  *   never adopted.
@@ -35,6 +36,7 @@ import {
   isSyncBlockingQueue,
   pickIntervalMs,
   purgeExpiredTimestamps,
+  UNFOLLOW_WATCHDOG_MS,
 } from "@/shared/safety";
 import type {
   AuditEntry,
@@ -211,8 +213,8 @@ export function startQueue(
           lastCode: null,
         })),
         cursor: 0,
-        // The first action is scheduled by the first tick, so opening the panel
-        // can never trigger an immediate burst.
+        // The first tick sends UNFOLLOW_ONE immediately; the content script
+        // dwells 2–10s before clicking, which is what prevents a burst.
         nextAt: null,
         sessionStartedAt: now,
         actionTimestamps: purgeExpiredTimestamps(queue.actionTimestamps, now),
@@ -290,7 +292,7 @@ export function planNext(
     // the watchdog schedule expires it.
     return {
       action: "wait",
-      nextAt: queue.nextAt ?? now + pickIntervalMs(limits, random),
+      nextAt: queue.nextAt ?? now + UNFOLLOW_WATCHDOG_MS,
       target: queue.items[inFlight],
     };
   }
@@ -317,20 +319,10 @@ export function planNext(
     };
   }
 
-  if (queue.nextAt === null) {
-    // A completed action clears the schedule; the next one always costs a full
-    // freshly drawn interval, which is what stops the queue from catching up.
-    return {
-      action: "wait",
-      nextAt: now + pickIntervalMs(limits, random),
-      reason: undefined,
-      target,
-    };
-  }
-
-  // The `nextAt` handed out here doubles as the watchdog for the flight it
-  // authorizes: if no result arrives by then, the attempt is written off.
-  return { action: "execute", nextAt: now + pickIntervalMs(limits, random), target };
+  // `nextAt === null` means the previous action finished (or the session just
+  // started). The content script still waits a random 2–10s on the profile
+  // before clicking, so this is not a burst.
+  return { action: "execute", nextAt: now + UNFOLLOW_WATCHDOG_MS, target };
 }
 
 function withQueue(state: ExtensionState, patch: Partial<UnfollowQueue>): ExtensionState {
@@ -609,9 +601,9 @@ function bookReleasedFlight(
  * Writes off a flight whose result never arrived.
  *
  * The watchdog is the schedule the dispatch itself persisted, so this can only
- * happen a full interval after the command was sent. The attempt is *not*
- * repeated: the worker cannot know whether the page acted, and a second click on
- * the same profile is the one thing that must not be guessed.
+ * happen after the dwell and confirmation window has already elapsed. The
+ * attempt is *not* repeated: the worker cannot know whether the page acted, and
+ * a second click on the same profile is the one thing that must not be guessed.
  */
 function expireStaleFlight(state: ExtensionState, now: number): ExtensionState {
   const queue = state.unfollowQueue;
@@ -827,8 +819,8 @@ export async function runQueueTick(
 }
 
 /**
- * Opens a session and arms the first tick. No unfollow command is sent here: the
- * first write waits for the scheduled interval, so pressing Start cannot produce
+ * Opens a session and dispatches the first unfollow. The content script dwells
+ * 2–10 seconds on the profile before clicking, so pressing Start cannot produce
  * a burst. The write tab is brought to the first target immediately so the user
  * can see where the queue will act.
  */

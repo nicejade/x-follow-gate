@@ -136,6 +136,20 @@ describe("loadState", () => {
     expect((await loadState()).settings.syncTargetCount).toBe(1_000);
   });
 
+  it("turns off the hidden v1 active-hours window on hydrate", async () => {
+    storage.seed({
+      ...createDefaultState(),
+      version: 1,
+      settings: {
+        ...createDefaultState().settings,
+        activeHours: { enabled: true, start: "09:00", end: "23:00" },
+      },
+    });
+
+    expect((await loadState()).settings.activeHours.enabled).toBe(false);
+    expect((await loadState()).version).toBe(STATE_VERSION);
+  });
+
   it("normalizes persisted following records the same way a batch is normalized", async () => {
     storage.seed({
       ...createDefaultState(),

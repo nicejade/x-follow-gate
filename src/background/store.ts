@@ -149,6 +149,9 @@ function hydrateState(value: unknown): ExtensionState {
     return defaults;
   }
 
+  const storedVersion = typeof value.version === "number" ? value.version : 0;
+  const settings = clampSettings(hydrateSection<Settings>(value.settings, defaults.settings));
+
   return {
     version: STATE_VERSION,
     session: hydrateSection<SessionState>(value.session, defaults.session),
@@ -157,9 +160,25 @@ function hydrateState(value: unknown): ExtensionState {
     whitelist: hydrateArray<WhitelistEntry>(value.whitelist, isWhitelistEntry),
     candidates: hydrateArray<string>(value.candidates, isNonEmptyString),
     unfollowQueue: hydrateSection<UnfollowQueue>(value.unfollowQueue, defaults.unfollowQueue),
-    settings: clampSettings(hydrateSection<Settings>(value.settings, defaults.settings)),
+    settings: migrateSettings(settings, storedVersion),
     auditLog: hydrateArray<AuditEntry>(value.auditLog, isAuditEntry),
   };
+}
+
+/**
+ * v1 shipped a hidden 09:00–23:00 window with no panel control. A start after
+ * 23:00 then waited until the next morning, which read as a tens-of-thousands
+ * of seconds delay. v2 turns that window off; an explicit later enable is kept.
+ */
+function migrateSettings(settings: Settings, storedVersion: number): Settings {
+  if (storedVersion >= 2) {
+    return settings;
+  }
+
+  return clampSettings({
+    ...settings,
+    activeHours: { ...settings.activeHours, enabled: false },
+  });
 }
 
 function hydrateSection<T extends object>(value: unknown, fallback: T): T {

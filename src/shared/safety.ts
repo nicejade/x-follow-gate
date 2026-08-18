@@ -24,7 +24,7 @@ export const COOLDOWN_MS = 60 * MINUTE_MS;
 
 /** Absolute limits; custom settings can never cross them. */
 export const HARD_LIMITS = {
-  minIntervalSec: 10,
+  minIntervalSec: 2,
   maxHourlyCap: 12,
   maxDailyCap: 40,
   maxSessionCap: 20,
@@ -36,15 +36,15 @@ export const DEFAULT_SYNC_TARGET_COUNT = 1_000;
 
 export const PRESET_LIMITS = {
   safe: {
-    intervalMinSec: 10,
-    intervalMaxSec: 30,
+    intervalMinSec: 2,
+    intervalMaxSec: 10,
     hourlyCap: 5,
     dailyCap: 20,
     sessionCap: 10,
   },
   balanced: {
-    intervalMinSec: 10,
-    intervalMaxSec: 25,
+    intervalMinSec: 2,
+    intervalMaxSec: 10,
     hourlyCap: 8,
     dailyCap: 30,
     sessionCap: 15,
@@ -52,7 +52,7 @@ export const PRESET_LIMITS = {
 } as const;
 
 export const DEFAULT_ACTIVE_HOURS: ActiveHours = {
-  enabled: true,
+  enabled: false,
   start: "09:00",
   end: "23:00",
 };
@@ -93,8 +93,8 @@ function parseTimeOfDay(value: string): number | null {
 
 /**
  * Repairs a stored window. A missing or unreadable record falls back to the
- * protective default instead of an open 24/7 window; an explicit boolean
- * `enabled` is user intent and is always preserved.
+ * documented default (currently an open window). An explicit boolean `enabled`
+ * is user intent and is always preserved.
  */
 function normalizeActiveHours(activeHours: ActiveHours | undefined): ActiveHours {
   if (typeof activeHours !== "object" || activeHours === null) {
@@ -242,9 +242,16 @@ export function pickIntervalMs(settings: Settings, random: () => number = Math.r
 
 /** Random dwell on a profile before clicking unfollow. */
 export const PROFILE_DWELL = {
-  minSec: 5,
+  minSec: 2,
   maxSec: 10,
 } as const;
+
+/**
+ * Deadline for an in-flight unfollow. Long enough for the 2–10s dwell plus the
+ * two-click confirmation, and at Chrome's alarm floor so a sleeping worker still
+ * wakes to write the attempt off.
+ */
+export const UNFOLLOW_WATCHDOG_MS = 30_000;
 
 export function pickProfileDwellMs(random: () => number = Math.random): number {
   const { minSec, maxSec } = PROFILE_DWELL;

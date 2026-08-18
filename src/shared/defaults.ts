@@ -9,7 +9,7 @@ import { SAFE_SETTINGS } from "./safety";
 import type { ExtensionState, Settings, SyncMeta, UnfollowQueue } from "./types";
 
 /** Bumped whenever persisted state needs a migration. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 /** Storage key holding the whole extension state tree. */
 export const STATE_STORAGE_KEY = "extensionState";
