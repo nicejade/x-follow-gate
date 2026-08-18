@@ -244,10 +244,10 @@ export async function runUnfollowCommand(
 /** Installs the worker→content command handler. Exported for deterministic tests. */
 export function createRuntimeMessageHandler(
   deps: RuntimeMessageHandlerDeps,
-): (message: unknown) => void {
+): (message: unknown) => { accepted: true } | undefined {
   return (message: unknown) => {
     if (!isExtensionMessage(message)) {
-      return;
+      return undefined;
     }
 
     switch (message.type) {
@@ -270,10 +270,13 @@ export function createRuntimeMessageHandler(
         break;
       case "UNFOLLOW_ONE":
         deps.onUnfollowOne?.(message);
-        break;
+
+        return { accepted: true };
       default:
         break;
     }
+
+    return undefined;
   };
 }
 
@@ -317,18 +320,33 @@ function createIsolatedRuntime(): void {
     },
   });
 
-  chrome.runtime.onMessage.addListener(
-    createRuntimeMessageHandler({
-      authProbe,
-      ensureController,
-      getController: () => controller,
-      onUnfollowOne: (message) => {
-        void runUnfollowCommand(message, (result) => {
-          sendRuntimeMessage({ type: "UNFOLLOW_RESULT", result });
+  const handle = createRuntimeMessageHandler({
+    authProbe,
+    ensureController,
+    getController: () => controller,
+    onUnfollowOne: (message) => {
+      void runUnfollowCommand(message, (result) => {
+        sendRuntimeMessage({ type: "UNFOLLOW_RESULT", result });
+      }).catch(() => {
+        sendRuntimeMessage({
+          type: "UNFOLLOW_RESULT",
+          result: {
+            userId: message.target.userId,
+            handle: message.target.handle,
+            ok: false,
+            code: "verification-failed",
+          },
         });
-      },
-    }),
-  );
+      });
+    },
+  });
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const response = handle(message);
+    if (response !== undefined) {
+      sendResponse(response);
+    }
+  });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {

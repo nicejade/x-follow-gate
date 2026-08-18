@@ -217,15 +217,27 @@ export async function sendUnfollowOne(
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      await chrome.tabs.sendMessage(tabId, message);
-
-      return true;
-    } catch {
-      if (attempt < attempts - 1) {
-        await wait(retryDelayMs);
+      const response: unknown = await chrome.tabs.sendMessage(tabId, message);
+      if (isAccepted(response)) {
+        return true;
       }
+    } catch {
+      // The content script is not listening yet, or the document was unloaded.
+    }
+
+    if (attempt < attempts - 1) {
+      await wait(retryDelayMs);
     }
   }
 
   return false;
+}
+
+function isAccepted(response: unknown): boolean {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "accepted" in response &&
+    (response as { accepted: unknown }).accepted === true
+  );
 }

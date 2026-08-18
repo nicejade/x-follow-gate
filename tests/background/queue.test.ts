@@ -217,6 +217,8 @@ function createChromeMock(
       }
 
       messages.push({ tabId, message });
+
+      return { accepted: true };
     }),
   };
 
@@ -1146,6 +1148,7 @@ describe("startUnfollowQueue", () => {
       { tabId: 7, message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER } },
     ]);
     expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + WATCHDOG_MS);
+    expect(chromeMock.updates).toEqual([{ tabId: 7, url: "https://x.com/alice", active: true }]);
   });
 
   it("persists nextAt before the alarm is created", async () => {

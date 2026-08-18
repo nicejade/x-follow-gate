@@ -84,6 +84,8 @@ function createTabsMock(initial: Array<Partial<FakeTab>> = []) {
       }
 
       messages.push({ tabId, message });
+
+      return { accepted: true };
     }),
   };
 
@@ -274,6 +276,13 @@ describe("sendUnfollowOne", () => {
       { tabId: 5, message: { type: "UNFOLLOW_ONE", target: target(), account: OWNER } },
     ]);
     expect(tabs.api.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat a send as delivered unless the content script accepts it", async () => {
+    install(createTabsMock([{ id: 5, url: "https://x.com/alice" }]));
+    tabs.api.sendMessage.mockResolvedValueOnce(undefined);
+
+    await expect(sendUnfollowOne(5, target(), OWNER, { attempts: 1 })).resolves.toBe(false);
   });
 
   it("reports an undelivered command instead of throwing", async () => {

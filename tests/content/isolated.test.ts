@@ -481,4 +481,38 @@ describe("createRuntimeMessageHandler", () => {
 
     expect(report).toHaveBeenCalledWith(ACCOUNT);
   });
+
+  it("acknowledges UNFOLLOW_ONE so the worker knows this document accepted it", () => {
+    const onUnfollowOne = vi.fn();
+    const authProbe = createAuthProbe({
+      env: {
+        detect: () => ACCOUNT,
+        schedule: () => 1,
+        cancel: () => {},
+      },
+      report: () => {},
+      settleDelaysMs: [],
+    });
+    const listener = createRuntimeMessageHandler({
+      authProbe,
+      ensureController: () => ({ start: vi.fn() }) as ScrollController,
+      getController: () => null,
+      onUnfollowOne,
+    });
+    const message = {
+      type: "UNFOLLOW_ONE" as const,
+      target: {
+        userId: "1",
+        handle: "alice",
+        name: "Alice",
+        avatarUrl: null,
+        followedBy: false,
+        syncedAt: 1,
+      },
+      account: ACCOUNT,
+    };
+
+    expect(listener(message)).toEqual({ accepted: true });
+    expect(onUnfollowOne).toHaveBeenCalledWith(message);
+  });
 });

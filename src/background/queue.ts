@@ -819,10 +819,11 @@ export async function runQueueTick(
 }
 
 /**
- * Opens a session and dispatches the first unfollow. The content script dwells
- * 2–10 seconds on the profile before clicking, so pressing Start cannot produce
- * a burst. The write tab is brought to the first target immediately so the user
- * can see where the queue will act.
+ * Opens a session and dispatches the first unfollow. Routing the write tab
+ * belongs to that tick alone: a second, overlapping navigation would unload the
+ * document that received `UNFOLLOW_ONE` and leave the queue silent until the
+ * watchdog expires. The content script dwells 2–10 seconds on the profile
+ * before clicking, so pressing Start cannot produce a burst.
  */
 export async function startUnfollowQueue(
   userIds: string[],
@@ -836,17 +837,11 @@ export async function startUnfollowQueue(
     return outcome;
   }
 
-  const previewTarget = outcome.state.unfollowQueue.items[0]?.handle;
-
   await updateState((current) => {
     const attempt = startQueue(current, userIds, now);
 
     return attempt.ok ? attempt.state : current;
   });
-
-  if (previewTarget !== undefined) {
-    void routeToProfile(previewTarget, routeOptions);
-  }
 
   return { ok: true, plan: await runQueueTick(now, random, routeOptions) };
 }
