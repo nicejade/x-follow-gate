@@ -376,6 +376,22 @@ describe("Side Panel", () => {
     });
   });
 
+  it("shows quota copy for the selected safety preset", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    expect(screen.getByText(/间隔 2–10 秒；每小时 5，每天 20，每会话 10/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "均衡" }));
+    expect(screen.getByText(/间隔 2–10 秒；每小时 8，每天 30，每会话 15/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("radio", { name: "自定义" }));
+    expect(
+      screen.getByText(/间隔不低于 2 秒；每小时 ≤12，每天 ≤40，每会话 ≤20/),
+    ).toBeInTheDocument();
+  });
+
   it("shows sync target count in settings with default and helper copy", async () => {
     installChrome(signedInState());
     await renderReadyApp();

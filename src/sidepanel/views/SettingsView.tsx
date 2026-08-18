@@ -2,8 +2,17 @@ import { useState } from "react";
 
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import { normalizeHandle } from "@/shared/rules";
-import { HARD_LIMITS, clampSettings } from "@/shared/safety";
+import { HARD_LIMITS, PRESET_LIMITS, clampSettings } from "@/shared/safety";
 import type { ExtensionState, SafetyPreset } from "@/shared/types";
+
+function presetPolicyCopy(preset: SafetyPreset): string {
+  if (preset === "custom") {
+    return `间隔不低于 ${HARD_LIMITS.minIntervalSec} 秒；每小时 ≤${HARD_LIMITS.maxHourlyCap}，每天 ≤${HARD_LIMITS.maxDailyCap}，每会话 ≤${HARD_LIMITS.maxSessionCap}。起止相同时视为全天开放。`;
+  }
+
+  const limits = PRESET_LIMITS[preset];
+  return `间隔 ${limits.intervalMinSec}–${limits.intervalMaxSec} 秒；每小时 ${limits.hourlyCap}，每天 ${limits.dailyCap}，每会话 ${limits.sessionCap}。`;
+}
 
 interface SettingsViewProps {
   state: ExtensionState;
@@ -32,12 +41,9 @@ export function SettingsView({ state, send }: SettingsViewProps) {
               </label>
             ))}
           </div>
-          {draft.preset === "custom" ? (
-            <p className="mt-2 text-xs leading-relaxed text-muted">
-              间隔不低于 {HARD_LIMITS.minIntervalSec} 秒；每小时 ≤{HARD_LIMITS.maxHourlyCap}，每天 ≤
-              {HARD_LIMITS.maxDailyCap}，每会话 ≤{HARD_LIMITS.maxSessionCap}。起止相同时视为全天开放。
-            </p>
-          ) : null}
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            {presetPolicyCopy(draft.preset)}
+          </p>
         </div>
 
         <label className="block text-sm">
