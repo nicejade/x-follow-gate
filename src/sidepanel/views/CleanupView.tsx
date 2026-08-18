@@ -174,6 +174,15 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
         </div>
       ) : null}
 
+      <button
+        type="button"
+        className="min-h-11 w-full rounded-[var(--radius-panel)] bg-accent text-sm font-medium text-bg disabled:opacity-40"
+        disabled={startDisabled}
+        onClick={() => setConfirming(true)}
+      >
+        开始清理（预览）
+      </button>
+
       <ul className="divide-y divide-border overflow-y-auto">
         {candidates.map((user) => (
           <CandidateRow
@@ -201,15 +210,6 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
           />
         ))}
       </ul>
-
-      <button
-        type="button"
-        className="min-h-11 w-full rounded-[var(--radius-panel)] bg-accent text-sm font-medium text-bg disabled:opacity-40"
-        disabled={startDisabled}
-        onClick={() => setConfirming(true)}
-      >
-        预览并开始
-      </button>
 
       {confirming ? (
         <ConfirmQueueDialog

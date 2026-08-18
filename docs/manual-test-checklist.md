@@ -42,7 +42,7 @@ Record Chrome version and pass/fail for each item. Do not bulk-unfollow a real a
 
 Use Safe preset. Select **exactly one** expendable candidate.
 
-1. [ ] 预览并开始 shows count, 安全, 90–150s, ETA, and the zero-risk disclaimer
+1. [ ] 开始清理（预览） shows count, 安全, 90–150s, ETA, and the zero-risk disclaimer
 2. [ ] 确认并开始
 3. [ ] Existing X tab navigates to that profile (no second tab)
 4. [ ] One Following click, one Unfollow confirmation

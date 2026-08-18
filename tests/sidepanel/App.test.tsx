@@ -190,7 +190,7 @@ describe("Side Panel", () => {
     expect(screen.queryByText("@bob · 未回关")).not.toBeInTheDocument();
     expect(screen.queryByText("@ghost")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
     expect(screen.getByText(/无法保证零风险/)).toBeInTheDocument();
     expect(screen.getByText(/档位 安全/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
@@ -208,8 +208,8 @@ describe("Side Panel", () => {
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
 
-    expect(screen.getByRole("button", { name: "预览并开始" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    expect(screen.getByRole("button", { name: "开始清理（预览）" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
 
     await waitFor(() => {
@@ -226,7 +226,7 @@ describe("Side Panel", () => {
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
 
-    expect(screen.getByRole("button", { name: "预览并开始" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "开始清理（预览）" })).toBeDisabled();
     expect(screen.getByText(/请先停止同步再取关/)).toBeInTheDocument();
   });
 
@@ -235,7 +235,7 @@ describe("Side Panel", () => {
     commandReplies.set("QUEUE_START", { ok: true, result: { ok: false, reason: "sync-running" } });
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
-    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
 
     await waitFor(() => {
@@ -247,7 +247,7 @@ describe("Side Panel", () => {
     installChrome(signedInState());
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
-    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
 
     await waitFor(() => {
@@ -261,7 +261,7 @@ describe("Side Panel", () => {
     commandReplies.set("QUEUE_START", undefined);
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
-    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
     fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
 
     await waitFor(() => {
@@ -297,7 +297,7 @@ describe("Side Panel", () => {
     );
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
-    expect(screen.getByRole("button", { name: "预览并开始" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "开始清理（预览）" })).toBeDisabled();
     expect(screen.getByText(/熔断中/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新登录状态" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "解除熔断" })).toBeInTheDocument();
