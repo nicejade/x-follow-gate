@@ -1,5 +1,7 @@
 import {
   applyUnfollowResult,
+  dismissQueueCooldown,
+  dismissUnfollowCooldown,
   enforceQueueOwner,
   FAILURE_BREAKER_THRESHOLD,
   isSyncBlockingQueue,
@@ -982,7 +984,7 @@ describe("pauseQueue and stopQueue", () => {
     }
   });
 
-  it("never lifts a breaker cooldown", () => {
+  it("never lifts a breaker cooldown through pause or stop", () => {
     const cooling = baseState({
       unfollowQueue: queue({
         status: "cooldown",
@@ -1000,6 +1002,44 @@ describe("pauseQueue and stopQueue", () => {
       status: "stopped",
       cooldownUntil: NOW + COOLDOWN_MS,
     });
+  });
+
+  it("lifts a breaker cooldown only through an explicit dismiss", () => {
+    const cooling = baseState({
+      unfollowQueue: queue({
+        status: "cooldown",
+        cooldownUntil: NOW + COOLDOWN_MS,
+        pauseReason: "auth-required",
+        consecutiveFailures: 3,
+      }),
+    });
+
+    const outcome = dismissQueueCooldown(cooling, NOW);
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) {
+      return;
+    }
+
+    expect(outcome.state.unfollowQueue).toMatchObject({
+      status: "stopped",
+      cooldownUntil: null,
+      pauseReason: null,
+      consecutiveFailures: 0,
+    });
+    expect(isQueueBlockingSync(outcome.state.unfollowQueue, NOW)).toBe(false);
+  });
+
+  it("refuses to dismiss when the breaker window is already closed", () => {
+    const state = baseState({
+      unfollowQueue: queue({
+        status: "paused",
+        cooldownUntil: NOW - 1,
+        pauseReason: "rate-limited",
+      }),
+    });
+
+    expect(dismissQueueCooldown(state, NOW)).toEqual({ ok: false, reason: "not-cooling" });
   });
 
   it("stops a queue and releases the tab for sync", () => {

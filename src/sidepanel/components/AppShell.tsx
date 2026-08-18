@@ -28,7 +28,7 @@ export function AppShell({ state, tab, onTabChange, now = Date.now(), children }
           <h1 className="text-base font-semibold">关注门卫</h1>
         </div>
         <p
-          className={`min-h-11 rounded-full px-3 py-2 text-sm ${
+          className={`inline-flex min-h-11 items-center justify-center rounded-full px-3 text-sm ${
             signedIn ? "bg-surface-raised text-text" : "bg-danger/15 text-danger"
           }`}
         >

@@ -283,7 +283,7 @@ describe("Side Panel", () => {
     });
   });
 
-  it("disables start during cooldown and never offers ignore-and-continue", async () => {
+  it("disables start during cooldown and offers manual dismiss", async () => {
     const until = Date.now() + 60 * 60 * 1000;
     installChrome(
       signedInState({
@@ -299,7 +299,50 @@ describe("Side Panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "清理" }));
     expect(screen.getByRole("button", { name: "预览并开始" })).toBeDisabled();
     expect(screen.getByText(/熔断中/)).toBeInTheDocument();
-    expect(screen.queryByText(/忽略并继续/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新登录状态" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "解除熔断" })).toBeInTheDocument();
+  });
+
+  it("requests cooldown dismiss from the cooldown banner", async () => {
+    const until = Date.now() + 60 * 60 * 1000;
+    installChrome(
+      signedInState({
+        unfollowQueue: {
+          ...createDefaultState().unfollowQueue,
+          status: "cooldown",
+          cooldownUntil: until,
+          pauseReason: "auth-required",
+        },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "解除熔断" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "QUEUE_DISMISS_COOLDOWN" });
+    });
+  });
+
+  it("requests auth refresh from the cooldown banner", async () => {
+    const until = Date.now() + 60 * 60 * 1000;
+    installChrome(
+      signedInState({
+        unfollowQueue: {
+          ...createDefaultState().unfollowQueue,
+          status: "cooldown",
+          cooldownUntil: until,
+          pauseReason: "auth-required",
+        },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "刷新登录状态" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "AUTH_REFRESH" });
+    });
   });
 
   it("whitelists a candidate from the cleanup list", async () => {

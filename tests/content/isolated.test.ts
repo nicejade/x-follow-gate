@@ -459,4 +459,26 @@ describe("createRuntimeMessageHandler", () => {
 
     expect(start).toHaveBeenCalledWith(1_500);
   });
+
+  it("probes auth immediately on AUTH_PROBE", () => {
+    const report = vi.fn();
+    const authProbe = createAuthProbe({
+      env: {
+        detect: () => ACCOUNT,
+        schedule: () => 1,
+        cancel: () => {},
+      },
+      report,
+      settleDelaysMs: [],
+    });
+    const listener = createRuntimeMessageHandler({
+      authProbe,
+      ensureController: () => ({ start: vi.fn() }) as ScrollController,
+      getController: () => null,
+    });
+
+    listener({ type: "AUTH_PROBE" });
+
+    expect(report).toHaveBeenCalledWith(ACCOUNT);
+  });
 });

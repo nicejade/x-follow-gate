@@ -31,6 +31,12 @@ import type {
 
 export type StartSyncReason = "queue-running" | "auth" | "missing-tab";
 
+export type RefreshAuthReason = "missing-tab";
+
+export type RefreshAuthResult =
+  | { ok: true; delivered: boolean }
+  | { ok: false; reason: RefreshAuthReason };
+
 export type StartSyncResult =
   { ok: true; tabId: number; delivered: boolean } | { ok: false; reason: StartSyncReason };
 
@@ -449,6 +455,18 @@ function sameAccount(left: AccountIdentity | null, right: AccountIdentity | null
  * running round re-delivers the scroll command, which covers a content script
  * that missed the original `SCROLL_SESSION_START`.
  */
+/** Asks an open x.com tab to re-probe the signed-in account. */
+export async function refreshAuth(): Promise<RefreshAuthResult> {
+  const tab = await findAnyXTab();
+  if (typeof tab?.id !== "number") {
+    return { ok: false, reason: "missing-tab" };
+  }
+
+  const delivered = await sendToTab(tab.id, { type: "AUTH_PROBE" });
+
+  return { ok: true, delivered };
+}
+
 export async function applyAuthStatus(
   account: AccountIdentity | null,
   tabId: number,

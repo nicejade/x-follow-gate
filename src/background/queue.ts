@@ -73,6 +73,8 @@ export interface QueuePlan {
 export type QueueStartBlockReason =
   "auth-required" | "queue-active" | "cooldown" | "sync-running" | "no-candidates";
 
+export type DismissCooldownReason = "not-cooling";
+
 export type StartQueueResult =
   { ok: true; state: ExtensionState } | { ok: false; reason: QueueStartBlockReason };
 
@@ -386,6 +388,33 @@ export function stopQueue(state: ExtensionState): ExtensionState {
     nextAt: null,
     items: releaseFlight(queue.items),
   });
+}
+
+/**
+ * Lifts an open breaker window at explicit user request. Pause and stop never do
+ * this; only a deliberate dismiss clears `cooldownUntil` before it expires.
+ */
+export function dismissQueueCooldown(
+  state: ExtensionState,
+  now: number,
+): { ok: true; state: ExtensionState } | { ok: false; reason: DismissCooldownReason } {
+  if (!isCoolingDown(state.unfollowQueue, now)) {
+    return { ok: false, reason: "not-cooling" };
+  }
+
+  const queue = state.unfollowQueue;
+
+  return {
+    ok: true,
+    state: withQueue(state, {
+      status: "stopped",
+      cooldownUntil: null,
+      pauseReason: null,
+      nextAt: null,
+      consecutiveFailures: 0,
+      items: releaseFlight(queue.items),
+    }),
+  };
 }
 
 /**
@@ -840,6 +869,21 @@ export async function stopUnfollowQueue(): Promise<void> {
   const state = await loadState();
   await persistIfChanged(state, stopQueue);
   await clearAlarm();
+}
+
+export async function dismissUnfollowCooldown(
+  now: number = Date.now(),
+): Promise<{ ok: true } | { ok: false; reason: DismissCooldownReason }> {
+  const state = await loadState();
+  const outcome = dismissQueueCooldown(state, now);
+  if (!outcome.ok) {
+    return outcome;
+  }
+
+  await persistIfChanged(state, () => outcome.state);
+  await clearAlarm();
+
+  return { ok: true };
 }
 
 /**

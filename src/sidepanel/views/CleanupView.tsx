@@ -4,7 +4,7 @@ import { ConfirmQueueDialog } from "@/sidepanel/components/ConfirmQueueDialog";
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import { formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
-import { describeQueueStart } from "@/sidepanel/lib/outcome";
+import { describeOutcome, describeQueueStart } from "@/sidepanel/lib/outcome";
 import { selectCandidates } from "@/shared/rules";
 import { COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
 import type { ExtensionState, FollowingUser, QueuePauseReason, SyncMeta } from "@/shared/types";
@@ -27,6 +27,10 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
   const [confirming, setConfirming] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [startSuccess, setStartSuccess] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [dismissMessage, setDismissMessage] = useState<string | null>(null);
+  const [dismissing, setDismissing] = useState(false);
 
   useEffect(() => {
     setSelected(new Set(candidates.map((user) => user.userId)));
@@ -69,6 +73,22 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
     (stamp) => stamp >= (queue.sessionStartedAt ?? 0),
   ).length;
 
+  async function dismissCooldown() {
+    setDismissMessage(null);
+    setDismissing(true);
+    const outcome = await send({ type: "QUEUE_DISMISS_COOLDOWN" });
+    setDismissing(false);
+    setDismissMessage(describeDismissCooldown(outcome));
+  }
+
+  async function refreshAuthStatus() {
+    setRefreshMessage(null);
+    setRefreshing(true);
+    const outcome = await send({ type: "AUTH_REFRESH" });
+    setRefreshing(false);
+    setRefreshMessage(describeAuthRefresh(outcome));
+  }
+
   async function startQueue(userIds: string[]) {
     setStartError(null);
     setStartSuccess(null);
@@ -86,7 +106,33 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
 
       {cooling ? (
         <StatusBanner tone="danger">
-          {`熔断中：${pauseCopy(queue.pauseReason)}。将于 ${new Date(queue.cooldownUntil ?? now + COOLDOWN_MS).toLocaleString()} 后可再次开始，不会忽略冷却。`}
+          <div className="space-y-3">
+            <p>{`熔断中：${pauseCopy(queue.pauseReason)}。将于 ${new Date(queue.cooldownUntil ?? now + COOLDOWN_MS).toLocaleString()} 后可自动恢复，或由你手动解除。`}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-[var(--radius-panel)] border border-danger/40 text-sm disabled:opacity-40"
+                disabled={refreshing || dismissing}
+                onClick={() => void refreshAuthStatus()}
+              >
+                {refreshing ? "刷新中…" : "刷新登录状态"}
+              </button>
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-[var(--radius-panel)] border border-danger text-sm text-danger disabled:opacity-40"
+                disabled={refreshing || dismissing}
+                onClick={() => void dismissCooldown()}
+              >
+                {dismissing ? "解除中…" : "解除熔断"}
+              </button>
+            </div>
+          </div>
+        </StatusBanner>
+      ) : null}
+      {refreshMessage !== null ? <StatusBanner>{refreshMessage}</StatusBanner> : null}
+      {dismissMessage !== null ? (
+        <StatusBanner tone={dismissMessage.includes("已解除") ? "success" : "danger"}>
+          {dismissMessage}
         </StatusBanner>
       ) : null}
       {syncBlocking ? <StatusBanner>{syncBlockCopy(state.syncMeta)}</StatusBanner> : null}
@@ -228,6 +274,47 @@ function syncBlockCopy(syncMeta: SyncMeta): string {
     : "同步进行中，取关已禁用。";
 }
 
+const AUTH_REFRESH_COPY: Record<string, string> = {
+  "missing-tab": "未找到 x.com 标签页，请先打开并登录后重试。",
+};
+
+const DISMISS_COOLDOWN_COPY: Record<string, string> = {
+  "not-cooling": "当前不在熔断冷却中。",
+};
+
+function describeDismissCooldown(outcome: Awaited<ReturnType<SendCommand>>): string {
+  const error = describeOutcome(outcome, DISMISS_COOLDOWN_COPY);
+  if (error !== null) {
+    return error;
+  }
+
+  const result = outcome.result;
+  if (typeof result === "object" && result !== null && (result as { ok?: unknown }).ok === true) {
+    return "熔断已解除，可以重新开始取关。";
+  }
+
+  return "解除失败，请稍后重试。";
+}
+
+function describeAuthRefresh(outcome: Awaited<ReturnType<SendCommand>>): string {
+  const error = describeOutcome(outcome, AUTH_REFRESH_COPY);
+  if (error !== null) {
+    return error;
+  }
+
+  const result = outcome.result;
+  if (typeof result !== "object" || result === null) {
+    return "已请求刷新，请稍候查看登录状态。";
+  }
+
+  const { ok, delivered } = result as { ok?: unknown; delivered?: unknown };
+  if (ok === true && delivered === false) {
+    return "已请求刷新，x.com 页面加载完成后会自动更新登录状态。";
+  }
+
+  return "已请求刷新，请稍候查看登录状态。";
+}
+
 function pauseCopy(reason: ExtensionState["unfollowQueue"]["pauseReason"]): string {
   switch (reason) {
     case "rate-limited":
@@ -255,28 +342,29 @@ function CandidateRow({
   onRemove: () => void;
 }) {
   return (
-    <li className="flex min-h-11 items-center gap-3 py-2">
+    <li className="flex items-center gap-2.5 py-1.5">
       <input
         type="checkbox"
         checked={checked}
         onChange={onToggle}
         aria-label={`选择 @${user.handle}`}
+        className="shrink-0"
       />
       {user.avatarUrl ? (
-        <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
+        <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full" />
       ) : (
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-raised text-xs">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-raised text-xs">
           {user.name.slice(0, 1)}
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{user.name}</p>
-        <p className="truncate text-xs text-muted">@{user.handle} · 未回关</p>
+        <p className="truncate text-sm leading-tight">{user.name}</p>
+        <p className="truncate text-xs leading-tight text-muted">@{user.handle} · 未回关</p>
       </div>
-      <div className="flex flex-col items-stretch">
+      <div className="flex shrink-0 flex-col gap-0">
         <button
           type="button"
-          className="min-h-9 rounded-[var(--radius-panel)] px-2 text-xs text-muted transition-colors hover:bg-surface-raised hover:text-text"
+          className="cursor-pointer rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-raised hover:text-text"
           onClick={onWhitelist}
         >
           白名单
@@ -284,7 +372,7 @@ function CandidateRow({
         <button
           type="button"
           aria-label={`删除 @${user.handle}`}
-          className="min-h-9 rounded-[var(--radius-panel)] px-2 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          className="cursor-pointer rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-danger hover:text-white"
           onClick={onRemove}
         >
           删除

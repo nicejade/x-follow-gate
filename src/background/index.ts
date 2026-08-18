@@ -6,6 +6,7 @@
 
 import {
   applyUnfollowResult,
+  dismissUnfollowCooldown,
   isUnfollowAlarm,
   pauseUnfollowQueue,
   runQueueTick,
@@ -19,6 +20,7 @@ import {
   applyScrollStatus,
   ingestFollowingBatch,
   pauseSync,
+  refreshAuth,
   startSync,
   stopSync,
 } from "@/background/sync-coordinator";
@@ -77,6 +79,8 @@ export async function handleMessage(
     case "AUTH_STATUS":
       await applyAuthStatus(message.account, sender.tab?.id ?? -1);
       return { applied: true };
+    case "AUTH_REFRESH":
+      return await refreshAuth();
     case "QUEUE_START":
       return await startUnfollowQueue(message.userIds);
     case "QUEUE_PAUSE":
@@ -88,6 +92,8 @@ export async function handleMessage(
     case "QUEUE_STOP":
       await stopUnfollowQueue();
       return { stopped: true };
+    case "QUEUE_DISMISS_COOLDOWN":
+      return await dismissUnfollowCooldown();
     case "UNFOLLOW_RESULT":
       return await applyUnfollowResult(message.result);
     case "UNFOLLOW_READY":
@@ -98,6 +104,7 @@ export async function handleMessage(
     case "WHITELIST_UPDATE":
       await updateState((state) => recomputeCandidates({ ...state, whitelist: message.entries }));
       return { updated: true };
+    case "AUTH_PROBE":
     case "SCROLL_SESSION_START":
     case "SCROLL_SESSION_PAUSE":
     case "SCROLL_SESSION_STOP":

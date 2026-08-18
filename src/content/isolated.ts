@@ -251,6 +251,9 @@ export function createRuntimeMessageHandler(
     }
 
     switch (message.type) {
+      case "AUTH_PROBE":
+        deps.authProbe.probe();
+        break;
       case "SCROLL_SESSION_START":
         deps.authProbe.probe();
         deps.ensureController().start(message.syncTargetCount);

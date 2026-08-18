@@ -3,6 +3,7 @@ import {
   applyScrollStatus,
   ingestFollowingBatch,
   pauseSync,
+  refreshAuth,
   startSync,
   stopSync,
 } from "@/background/sync-coordinator";
@@ -775,6 +776,26 @@ describe("applyScrollStatus", () => {
     await applyScrollStatus(scrollStatus(), NOW);
 
     expect(storage.persisted().syncMeta).toMatchObject({ status: "running", startedAt: NOW });
+  });
+});
+
+describe("refreshAuth", () => {
+  it("asks an open x.com tab to probe auth immediately", async () => {
+    install(createTabsMock([{ id: 7, url: "https://x.com/home", active: true }]));
+
+    const result = await refreshAuth();
+
+    expect(result).toEqual({ ok: true, delivered: true });
+    expect(tabs.messages).toEqual([{ tabId: 7, message: { type: "AUTH_PROBE" } }]);
+  });
+
+  it("refuses when no x.com tab is open", async () => {
+    install(createTabsMock([]));
+
+    const result = await refreshAuth();
+
+    expect(result).toEqual({ ok: false, reason: "missing-tab" });
+    expect(tabs.messages).toEqual([]);
   });
 });
 

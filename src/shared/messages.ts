@@ -42,9 +42,15 @@ export type ExtensionMessage =
   | { type: "SCROLL_SESSION_STOP" }
   /** Content script → worker. `null` means "unknown" and blocks every write. */
   | { type: "AUTH_STATUS"; account: AccountIdentity | null }
+  /** Side panel → worker. Re-probes the signed-in account on an open x.com tab. */
+  | { type: "AUTH_REFRESH" }
+  /** Worker → content script. Triggers an immediate auth probe. */
+  | { type: "AUTH_PROBE" }
   | { type: "QUEUE_START"; userIds: string[] }
   | { type: "QUEUE_PAUSE"; reason: QueuePauseReason }
   | { type: "QUEUE_STOP" }
+  /** Side panel → worker. Clears an open breaker cooldown at user request. */
+  | { type: "QUEUE_DISMISS_COOLDOWN" }
   | { type: "UNFOLLOW_READY"; tabId: number; account: AccountIdentity | null }
   /**
    * Worker → content script. One command performs at most one unfollow. The
@@ -70,9 +76,12 @@ const MESSAGE_TYPES: ReadonlySet<string> = new Set<ExtensionMessageType>([
   "SCROLL_SESSION_PAUSE",
   "SCROLL_SESSION_STOP",
   "AUTH_STATUS",
+  "AUTH_REFRESH",
+  "AUTH_PROBE",
   "QUEUE_START",
   "QUEUE_PAUSE",
   "QUEUE_STOP",
+  "QUEUE_DISMISS_COOLDOWN",
   "UNFOLLOW_READY",
   "UNFOLLOW_ONE",
   "UNFOLLOW_RESULT",

@@ -18,9 +18,12 @@ function routeMessage(message: ExtensionMessage): ExtensionMessage["type"] {
     case "SCROLL_SESSION_PAUSE":
     case "SCROLL_SESSION_STOP":
     case "AUTH_STATUS":
+    case "AUTH_REFRESH":
+    case "AUTH_PROBE":
     case "QUEUE_START":
     case "QUEUE_PAUSE":
     case "QUEUE_STOP":
+    case "QUEUE_DISMISS_COOLDOWN":
     case "UNFOLLOW_READY":
     case "UNFOLLOW_ONE":
     case "UNFOLLOW_RESULT":
@@ -67,9 +70,12 @@ const messages: ExtensionMessage[] = [
   { type: "SCROLL_SESSION_STOP" },
   { type: "AUTH_STATUS", account: { userId: "9", handle: "self" } },
   { type: "AUTH_STATUS", account: null },
+  { type: "AUTH_REFRESH" },
+  { type: "AUTH_PROBE" },
   { type: "QUEUE_START", userIds: ["1", "2"] },
   { type: "QUEUE_PAUSE", reason: "hourly-cap" },
   { type: "QUEUE_STOP" },
+  { type: "QUEUE_DISMISS_COOLDOWN" },
   { type: "UNFOLLOW_READY", tabId: 7, account: { userId: "9", handle: "self" } },
   {
     type: "UNFOLLOW_ONE",
@@ -118,9 +124,12 @@ describe("ExtensionMessage", () => {
       "SCROLL_SESSION_STOP",
       "AUTH_STATUS",
       "AUTH_STATUS",
+      "AUTH_REFRESH",
+      "AUTH_PROBE",
       "QUEUE_START",
       "QUEUE_PAUSE",
       "QUEUE_STOP",
+      "QUEUE_DISMISS_COOLDOWN",
       "UNFOLLOW_READY",
       "UNFOLLOW_ONE",
       "UNFOLLOW_RESULT",
