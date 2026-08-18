@@ -33,6 +33,7 @@ export type ExtensionMessage =
   | { type: "SYNC_PAUSE"; reason: SyncPauseCommandReason }
   | { type: "SYNC_STOP" }
   | { type: "FOLLOWING_BATCH"; users: FollowingUser[] }
+  | { type: "FOLLOWING_REMOVE"; userIds: string[] }
   | { type: "SCROLL_STATUS"; status: ScrollStatus }
   // Worker → content script. The worker owns the round; the content script only
   // reacts to these three commands and never decides to scroll on its own.
@@ -63,6 +64,7 @@ const MESSAGE_TYPES: ReadonlySet<string> = new Set<ExtensionMessageType>([
   "SYNC_PAUSE",
   "SYNC_STOP",
   "FOLLOWING_BATCH",
+  "FOLLOWING_REMOVE",
   "SCROLL_STATUS",
   "SCROLL_SESSION_START",
   "SCROLL_SESSION_PAUSE",

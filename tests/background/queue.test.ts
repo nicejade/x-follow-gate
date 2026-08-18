@@ -721,6 +721,8 @@ describe("recordResult", () => {
     expect(next.auditLog).toEqual([
       { at: NOW, userId: "1", handle: "alice", ok: true, code: "success" },
     ]);
+    expect(next.following["1"]).toBeUndefined();
+    expect(next.candidates).toEqual(["2", "3"]);
   });
 
   it("treats an already-unfollowed target as a completed action", () => {
@@ -731,6 +733,7 @@ describe("recordResult", () => {
       lastCode: "already-unfollowed",
     });
     expect(next.unfollowQueue.actionTimestamps).toEqual([NOW]);
+    expect(next.following["1"]).toBeUndefined();
   });
 
   it("does not schedule the next attempt itself", () => {

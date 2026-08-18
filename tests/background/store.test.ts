@@ -2,6 +2,7 @@ import {
   applyFollowingBatch,
   loadState,
   recomputeCandidates,
+  removeFollowingUsers,
   replaceState,
   updateState,
 } from "@/background/store";
@@ -320,5 +321,27 @@ describe("recomputeCandidates", () => {
     const protectedState = recomputeCandidates({ ...synced, whitelist: [{ userId: "1" }] });
 
     expect(protectedState.candidates).toEqual(["2"]);
+  });
+});
+
+describe("removeFollowingUsers", () => {
+  it("removes users from the following map and refreshes candidates", () => {
+    const synced = applyFollowingBatch(createDefaultState(), [
+      user("1", "alice", false),
+      user("2", "bob", false),
+    ]);
+
+    const next = removeFollowingUsers(synced, ["1"]);
+
+    expect(next.following["1"]).toBeUndefined();
+    expect(next.following["2"]).toBeDefined();
+    expect(next.candidates).toEqual(["2"]);
+  });
+
+  it("returns the same state when nothing is removed", () => {
+    const synced = applyFollowingBatch(createDefaultState(), [user("1", "alice", false)]);
+
+    expect(removeFollowingUsers(synced, [])).toBe(synced);
+    expect(removeFollowingUsers(synced, ["9"])).toBe(synced);
   });
 });

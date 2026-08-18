@@ -310,6 +310,14 @@ describe("Side Panel", () => {
     expect(messages.some((message) => message.type === "WHITELIST_UPDATE")).toBe(true);
   });
 
+  it("removes a candidate from the cleanup list", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "删除 @alice" })[0]!);
+    expect(messages).toContainEqual({ type: "FOLLOWING_REMOVE", userIds: ["2"] });
+  });
+
   it("removes a whitelist entry from settings", async () => {
     installChrome(
       signedInState({ whitelist: [{ handle: "alice" }, { userId: "3", handle: "bob" }] }),

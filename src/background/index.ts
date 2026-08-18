@@ -13,7 +13,7 @@ import {
   stopUnfollowQueue,
   UNFOLLOW_ALARM_NAME,
 } from "@/background/queue";
-import { loadState, recomputeCandidates, updateState } from "@/background/store";
+import { loadState, recomputeCandidates, removeFollowingUsers, updateState } from "@/background/store";
 import {
   applyAuthStatus,
   applyScrollStatus,
@@ -68,6 +68,9 @@ export async function handleMessage(
     case "FOLLOWING_BATCH":
       await ingestFollowingBatch(message.users);
       return { ingested: message.users.length };
+    case "FOLLOWING_REMOVE":
+      await updateState((state) => removeFollowingUsers(state, message.userIds));
+      return { removed: message.userIds.length };
     case "SCROLL_STATUS":
       await applyScrollStatus(message.status);
       return { applied: true };

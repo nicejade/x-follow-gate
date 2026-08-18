@@ -12,6 +12,7 @@ function routeMessage(message: ExtensionMessage): ExtensionMessage["type"] {
     case "SYNC_PAUSE":
     case "SYNC_STOP":
     case "FOLLOWING_BATCH":
+    case "FOLLOWING_REMOVE":
     case "SCROLL_STATUS":
     case "SCROLL_SESSION_START":
     case "SCROLL_SESSION_PAUSE":
@@ -49,6 +50,7 @@ const messages: ExtensionMessage[] = [
       },
     ],
   },
+  { type: "FOLLOWING_REMOVE", userIds: ["1"] },
   {
     type: "SCROLL_STATUS",
     status: {
@@ -109,6 +111,7 @@ describe("ExtensionMessage", () => {
       "SYNC_PAUSE",
       "SYNC_STOP",
       "FOLLOWING_BATCH",
+      "FOLLOWING_REMOVE",
       "SCROLL_STATUS",
       "SCROLL_SESSION_START",
       "SCROLL_SESSION_PAUSE",

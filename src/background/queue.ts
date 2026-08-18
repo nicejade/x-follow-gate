@@ -24,7 +24,7 @@
  * single source of truth for an MV3 worker that can be killed between events.
  */
 
-import { loadState, updateState } from "@/background/store";
+import { loadState, removeFollowingUsers, updateState } from "@/background/store";
 import { routeToProfile, sendUnfollowOne } from "@/background/tab-router";
 import type { RouteOptions } from "@/background/tab-router";
 import { normalizeUserId, selectCandidates } from "@/shared/rules";
@@ -518,16 +518,19 @@ export function recordResult(
     return applyFailure(state, index, code, now, true);
   }
 
-  return {
-    ...withQueue(state, {
-      items: replaceItem(queue.items, index, { status: "done", lastCode: code }),
-      cursor: index + 1,
-      nextAt: null,
-      actionTimestamps: [...purgeExpiredTimestamps(queue.actionTimestamps, now), now],
-      consecutiveFailures: 0,
-    }),
-    auditLog: appendAudit(state, auditEntry(item, code, true, now)),
-  };
+  return removeFollowingUsers(
+    {
+      ...withQueue(state, {
+        items: replaceItem(queue.items, index, { status: "done", lastCode: code }),
+        cursor: index + 1,
+        nextAt: null,
+        actionTimestamps: [...purgeExpiredTimestamps(queue.actionTimestamps, now), now],
+        consecutiveFailures: 0,
+      }),
+      auditLog: appendAudit(state, auditEntry(item, code, true, now)),
+    },
+    [userId],
+  );
 }
 
 /**
@@ -557,7 +560,7 @@ function bookReleasedFlight(
   const code = normalizeCode(result.code);
   const completed = COMPLETED_CODES.has(code);
 
-  return {
+  const next = {
     ...withQueue(state, {
       items: replaceItem(queue.items, index, {
         status: completed ? "done" : "failed",
@@ -569,6 +572,8 @@ function bookReleasedFlight(
     }),
     auditLog: appendAudit(state, auditEntry(item, code, completed, now)),
   };
+
+  return completed ? removeFollowingUsers(next, [userId]) : next;
 }
 
 /**

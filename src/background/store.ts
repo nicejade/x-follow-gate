@@ -106,6 +106,26 @@ export function recomputeCandidates(state: ExtensionState): ExtensionState {
   return { ...state, candidates };
 }
 
+/** Removes users from the following map and refreshes the candidate snapshot. */
+export function removeFollowingUsers(state: ExtensionState, userIds: string[]): ExtensionState {
+  if (userIds.length === 0) {
+    return state;
+  }
+
+  const following = { ...state.following };
+  let changed = false;
+
+  for (const rawId of userIds) {
+    const userId = normalizeUserId(rawId);
+    if (userId !== "" && following[userId] !== undefined) {
+      delete following[userId];
+      changed = true;
+    }
+  }
+
+  return changed ? recomputeCandidates({ ...state, following }) : state;
+}
+
 async function persist(state: ExtensionState): Promise<ExtensionState> {
   const next = sanitizeState(state);
   await chrome.storage.local.set({ [STATE_STORAGE_KEY]: next });

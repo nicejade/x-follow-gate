@@ -151,6 +151,7 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
                 entries: [...state.whitelist, { userId: user.userId, handle: user.handle }],
               })
             }
+            onRemove={() => send({ type: "FOLLOWING_REMOVE", userIds: [user.userId] })}
           />
         ))}
       </ul>
@@ -245,11 +246,13 @@ function CandidateRow({
   checked,
   onToggle,
   onWhitelist,
+  onRemove,
 }: {
   user: FollowingUser;
   checked: boolean;
   onToggle: () => void;
   onWhitelist: () => void;
+  onRemove: () => void;
 }) {
   return (
     <li className="flex min-h-11 items-center gap-3 py-2">
@@ -270,9 +273,23 @@ function CandidateRow({
         <p className="truncate text-sm">{user.name}</p>
         <p className="truncate text-xs text-muted">@{user.handle} · 未回关</p>
       </div>
-      <button type="button" className="min-h-11 px-2 text-xs text-muted" onClick={onWhitelist}>
-        白名单
-      </button>
+      <div className="flex flex-col items-stretch">
+        <button
+          type="button"
+          className="min-h-9 rounded-[var(--radius-panel)] px-2 text-xs text-muted transition-colors hover:bg-surface-raised hover:text-text"
+          onClick={onWhitelist}
+        >
+          白名单
+        </button>
+        <button
+          type="button"
+          aria-label={`删除 @${user.handle}`}
+          className="min-h-9 rounded-[var(--radius-panel)] px-2 text-xs text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+          onClick={onRemove}
+        >
+          删除
+        </button>
+      </div>
     </li>
   );
 }
