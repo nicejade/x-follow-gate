@@ -10,6 +10,11 @@ const TRANSPORT_COPY: Record<string, string> = {
   "internal-error": "扩展内部错误，请重新加载本扩展后重试。",
 };
 
+export interface QueueStartFeedback {
+  error: string | null;
+  success: string | null;
+}
+
 /**
  * Turns a command outcome into a sentence, or `null` when it succeeded.
  *
@@ -40,4 +45,42 @@ export function describeOutcome(
   const code = typeof reason === "string" ? reason : "internal-error";
 
   return blockCopy[code] ?? TRANSPORT_COPY[code] ?? `操作失败（${code}）。`;
+}
+
+/** Surfaces both refusal and the positive acknowledgement a start deserves. */
+export function describeQueueStart(
+  outcome: SendOutcome,
+  blockCopy: Record<string, string>,
+): QueueStartFeedback {
+  const error = describeOutcome(outcome, blockCopy);
+  if (error !== null) {
+    return { error, success: null };
+  }
+
+  if (!outcome.ok) {
+    return { error: null, success: null };
+  }
+
+  const result = outcome.result;
+  if (typeof result !== "object" || result === null) {
+    return { error: null, success: null };
+  }
+
+  const { ok, plan } = result as { ok?: unknown; plan?: { nextAt?: number | null } };
+  if (ok !== true) {
+    return { error: null, success: null };
+  }
+
+  const seconds =
+    typeof plan?.nextAt === "number"
+      ? Math.max(1, Math.ceil((plan.nextAt - Date.now()) / 1000))
+      : null;
+
+  return {
+    error: null,
+    success:
+      seconds === null
+        ? "队列已启动。将打开目标主页并按安全间隔执行取关。"
+        : `队列已启动。已打开首个目标主页，约 ${seconds} 秒后执行第一次取关。`,
+  };
 }

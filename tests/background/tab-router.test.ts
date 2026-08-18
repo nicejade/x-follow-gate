@@ -51,8 +51,16 @@ function createTabsMock(initial: Array<Partial<FakeTab>> = []) {
 
       return { ...tab };
     }),
-    create: vi.fn(async () => {
-      throw new Error("the unfollow path must never open a tab");
+    create: vi.fn(async (properties: { url?: string; active?: boolean }) => {
+      const tab: FakeTab = {
+        id: nextId++,
+        url: properties.url ?? "https://x.com/home",
+        active: properties.active ?? true,
+        status: "complete",
+      };
+      tabs.push(tab);
+
+      return { ...tab };
     }),
     update: vi.fn(async (tabId: number, properties: { url?: string; active?: boolean }) => {
       updates.push({ tabId, ...properties });
@@ -184,14 +192,16 @@ describe("routeToProfile", () => {
     expect(tabs.updates).toEqual([{ tabId: 5, active: true }]);
   });
 
-  it("reports missing-tab when no X context is open", async () => {
+  it("opens an X tab when no context exists", async () => {
     install(createTabsMock([{ id: 5, url: "https://example.com/" }]));
 
     const route = await routeToProfile("alice", { wait: instantWait });
 
-    expect(route).toEqual({ ok: false, reason: "missing-tab" });
-    expect(tabs.api.create).not.toHaveBeenCalled();
-    expect(tabs.api.update).not.toHaveBeenCalled();
+    expect(route).toEqual({ ok: true, tabId: expect.any(Number) });
+    expect(tabs.api.create).toHaveBeenCalledWith({
+      url: "https://x.com/alice",
+      active: true,
+    });
   });
 
   it("reports missing-tab when the tab disappears while it is being routed", async () => {

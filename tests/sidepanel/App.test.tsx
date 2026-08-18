@@ -61,7 +61,13 @@ function installChrome(state: ExtensionState, delayResponse = false) {
           callback?.(
             commandReplies.has(message.type)
               ? commandReplies.get(message.type)
-              : { ok: true, result: { ok: true } },
+              : {
+                  ok: true,
+                  result: {
+                    ok: true,
+                    plan: { action: "wait", nextAt: Date.now() + 20_000 },
+                  },
+                },
           );
           return;
         }
@@ -234,6 +240,19 @@ describe("Side Panel", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/同步仍在进行/)).toBeInTheDocument();
+    });
+  });
+
+  it("acknowledges a successful start with a countdown", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览并开始" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/队列已启动/)).toBeInTheDocument();
+      expect(screen.getByText(/秒后执行第一次取关/)).toBeInTheDocument();
     });
   });
 

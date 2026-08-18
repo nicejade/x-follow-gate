@@ -32,7 +32,9 @@ import {
   canRunNext,
   clampSettings,
   COOLDOWN_MS,
+  isFirstActionOfSession,
   isSyncBlockingQueue,
+  pickBootstrapIntervalMs,
   pickIntervalMs,
   purgeExpiredTimestamps,
 } from "@/shared/safety";
@@ -316,11 +318,16 @@ export function planNext(
   }
 
   if (queue.nextAt === null) {
-    // A completed action clears the schedule; the next one always costs a full
+    // The first action of a session uses a shorter bootstrap delay so a
+    // confirmed start feels responsive; every later action still costs a full
     // freshly drawn interval, which is what stops the queue from catching up.
+    const intervalMs = isFirstActionOfSession(queue)
+      ? pickBootstrapIntervalMs(random)
+      : pickIntervalMs(limits, random);
+
     return {
       action: "wait",
-      nextAt: now + pickIntervalMs(limits, random),
+      nextAt: now + intervalMs,
       reason: undefined,
       target,
     };
@@ -793,8 +800,10 @@ export async function runQueueTick(
 }
 
 /**
- * Opens a session and arms the first tick. No command is sent here: the first
- * unfollow is a full interval away, so pressing Start cannot produce a burst.
+ * Opens a session and arms the first tick. No unfollow command is sent here: the
+ * first write waits for the bootstrap delay, so pressing Start cannot produce a
+ * burst. The write tab is brought to the first target immediately so the user
+ * can see where the queue will act.
  */
 export async function startUnfollowQueue(
   userIds: string[],
@@ -808,11 +817,17 @@ export async function startUnfollowQueue(
     return outcome;
   }
 
+  const previewTarget = outcome.state.unfollowQueue.items[0]?.handle;
+
   await updateState((current) => {
     const attempt = startQueue(current, userIds, now);
 
     return attempt.ok ? attempt.state : current;
   });
+
+  if (previewTarget !== undefined) {
+    void routeToProfile(previewTarget, routeOptions);
+  }
 
   return { ok: true, plan: await runQueueTick(now, random, routeOptions) };
 }

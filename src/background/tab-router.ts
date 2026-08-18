@@ -7,9 +7,9 @@
  * 1. **Reuse, never multiply.** An existing X tab is navigated to the target
  *    profile. A second tab would let two pages act at once, which is exactly the
  *    pattern automated-abuse detection looks for.
- * 2. **Never open a tab.** A write needs an X context the user already has open.
- *    Without one the queue pauses with `missing-tab` instead of manufacturing a
- *    session in the background.
+ * 2. **Open only when necessary.** A write needs an X context. When the user has
+ *    none open, one tab is created and brought to the front — the same pattern
+ *    the sync path already uses — instead of pausing with no explanation.
  * 3. **Readiness is proven, not assumed.** The tab must actually be on the
  *    target profile and finished loading before a command is issued, and the
  *    command counts as delivered only when the content script acknowledges it.
@@ -32,6 +32,12 @@ export interface RouteOptions {
   wait?: (delayMs: number) => Promise<void>;
   attempts?: number;
   intervalMs?: number;
+}
+
+export interface SendUnfollowOptions {
+  attempts?: number;
+  retryDelayMs?: number;
+  wait?: (delayMs: number) => Promise<void>;
 }
 
 interface TabLike {
@@ -105,6 +111,32 @@ async function queryXTabs(): Promise<TabLike[]> {
 }
 
 /**
+ * Ensures there is exactly one X tab to write through, creating one when the
+ * user has none open. Mirrors the sync coordinator's `ensureFollowingTab`.
+ */
+async function ensureWriteTab(handle: string): Promise<number | null> {
+  const url = profileUrl(handle);
+
+  try {
+    const existing = pickTab(await queryXTabs(), handle);
+    if (existing !== null && typeof existing.id === "number") {
+      await chrome.tabs.update(
+        existing.id,
+        isProfileUrl(existing.url, handle) ? { active: true } : { url, active: true },
+      );
+
+      return existing.id;
+    }
+
+    const created = await chrome.tabs.create({ url, active: true });
+
+    return typeof created.id === "number" ? created.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Waits until the tab is on the target profile and has finished loading.
  *
  * A tab that navigates elsewhere (an interstitial, a login flow) never becomes
@@ -150,21 +182,8 @@ export async function routeToProfile(
     intervalMs: options.intervalMs ?? READINESS_INTERVAL_MS,
   };
 
-  let tabId: number;
-  try {
-    const tab = pickTab(await queryXTabs(), handle);
-    if (tab === null || typeof tab.id !== "number") {
-      return { ok: false, reason: "missing-tab" };
-    }
-
-    tabId = tab.id;
-    await chrome.tabs.update(
-      tabId,
-      isProfileUrl(tab.url, handle) ? { active: true } : { url: profileUrl(handle), active: true },
-    );
-  } catch {
-    // A tab can close between the query and the update; that is a missing
-    // context, not a failure the caller has to handle.
+  const tabId = await ensureWriteTab(handle);
+  if (tabId === null) {
     return { ok: false, reason: "missing-tab" };
   }
 
@@ -189,14 +208,24 @@ export async function sendUnfollowOne(
   tabId: number,
   target: FollowingUser,
   account: AccountIdentity,
+  options: SendUnfollowOptions = {},
 ): Promise<boolean> {
   const message: ExtensionMessage = { type: "UNFOLLOW_ONE", target, account };
+  const attempts = options.attempts ?? 4;
+  const retryDelayMs = options.retryDelayMs ?? 500;
+  const wait = options.wait ?? defaultWait;
 
-  try {
-    await chrome.tabs.sendMessage(tabId, message);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await chrome.tabs.sendMessage(tabId, message);
 
-    return true;
-  } catch {
-    return false;
+      return true;
+    } catch {
+      if (attempt < attempts - 1) {
+        await wait(retryDelayMs);
+      }
+    }
   }
+
+  return false;
 }

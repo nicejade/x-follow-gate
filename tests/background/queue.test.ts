@@ -44,6 +44,8 @@ const NOW = localTime(12);
 const OWNER = { userId: "9", handle: "self" };
 const SAFE_MIN_MS = 90_000;
 const SAFE_MAX_MS = 150_000;
+const BOOTSTRAP_MIN_MS = 15_000;
+const BOOTSTRAP_MAX_MS = 30_000;
 
 function user(overrides: Partial<FollowingUser> = {}): FollowingUser {
   return {
@@ -458,26 +460,60 @@ describe("isSyncBlockingQueue", () => {
 });
 
 describe("planNext", () => {
-  it("holds one full interval before the first unfollow of a session", () => {
+  it("uses a bootstrap interval before the first unfollow of a session", () => {
     const plan = planNext(runningQueue({ nextAt: null }), settings(), NOW, () => 0);
 
     expect(plan).toEqual({
       action: "wait",
-      nextAt: NOW + SAFE_MIN_MS,
+      nextAt: NOW + 15_000,
       reason: undefined,
       target: item(),
     });
   });
 
-  it("draws the interval inside the Safe band", () => {
+  it("holds the full preset interval before the next unfollow after one completes", () => {
+    const plan = planNext(
+      runningQueue({
+        nextAt: null,
+        items: [
+          item({ status: "done" }),
+          item({ userId: "2", handle: "bob", status: "pending" }),
+        ],
+      }),
+      settings(),
+      NOW,
+      () => 0,
+    );
+
+    expect(plan).toEqual({
+      action: "wait",
+      nextAt: NOW + SAFE_MIN_MS,
+      reason: undefined,
+      target: item({ userId: "2", handle: "bob", status: "pending" }),
+    });
+  });
+
+  it("draws the bootstrap band for the first action of a session", () => {
     const band = [0, 0.5, 1].map(
       (sample) => planNext(runningQueue({ nextAt: null }), settings(), NOW, () => sample).nextAt,
+    );
+
+    expect(band).toEqual([NOW + BOOTSTRAP_MIN_MS, NOW + 22_500, NOW + BOOTSTRAP_MAX_MS]);
+  });
+
+  it("draws the full preset band after the first action completes", () => {
+    const queue = runningQueue({
+      nextAt: null,
+      items: [item({ status: "done" }), item({ userId: "2", handle: "bob", status: "pending" })],
+    });
+    const band = [0, 0.5, 1].map(
+      (sample) => planNext(queue, settings(), NOW, () => sample).nextAt,
     );
 
     expect(band).toEqual([NOW + SAFE_MIN_MS, NOW + 120_000, NOW + SAFE_MAX_MS]);
   });
 
-  it("draws the interval inside the Balanced band", () => {
+  it("draws the bootstrap band for the first action regardless of preset", () => {
     const balanced = settings({
       preset: "balanced",
       intervalMinSec: 75,
@@ -491,21 +527,25 @@ describe("planNext", () => {
       (sample) => planNext(runningQueue({ nextAt: null }), balanced, NOW, () => sample).nextAt,
     );
 
-    expect(band).toEqual([NOW + 75_000, NOW + 120_000]);
+    expect(band).toEqual([NOW + BOOTSTRAP_MIN_MS, NOW + BOOTSTRAP_MAX_MS]);
   });
 
-  it("clamps a custom interval to the hard floor", () => {
+  it("uses the bootstrap delay for the first action even with custom settings", () => {
     const custom = settings({ preset: "custom", intervalMinSec: 5, intervalMaxSec: 10 });
 
     const plan = planNext(runningQueue({ nextAt: null }), custom, NOW, () => 0);
 
-    expect(plan.nextAt).toBe(NOW + 60_000);
+    expect(plan.nextAt).toBe(NOW + BOOTSTRAP_MIN_MS);
   });
 
-  it("re-applies the preset band when stored settings were tampered with", () => {
+  it("re-applies the preset band after the first action completes", () => {
     const tampered = settings({ intervalMinSec: 1, intervalMaxSec: 2 });
+    const queueAfterFirst = runningQueue({
+      nextAt: null,
+      items: [item({ status: "done" }), item({ userId: "2", handle: "bob", status: "pending" })],
+    });
 
-    const plan = planNext(runningQueue({ nextAt: null }), tampered, NOW, () => 0);
+    const plan = planNext(queueAfterFirst, tampered, NOW, () => 0);
 
     expect(plan.nextAt).toBe(NOW + SAFE_MIN_MS);
   });
@@ -1094,15 +1134,15 @@ describe("startUnfollowQueue", () => {
 
     expect(outcome).toMatchObject({
       ok: true,
-      plan: { action: "wait", nextAt: NOW + SAFE_MIN_MS },
+      plan: { action: "wait", nextAt: NOW + BOOTSTRAP_MIN_MS },
     });
     expect(chromeMock.persistedQueue()).toMatchObject({
       status: "running",
-      nextAt: NOW + SAFE_MIN_MS,
+      nextAt: NOW + BOOTSTRAP_MIN_MS,
       ownerUserId: OWNER.userId,
     });
     expect(chromeMock.messages).toEqual([]);
-    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + SAFE_MIN_MS);
+    expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + BOOTSTRAP_MIN_MS);
   });
 
   it("persists nextAt before the alarm is created", async () => {
@@ -1111,7 +1151,7 @@ describe("startUnfollowQueue", () => {
     await startUnfollowQueue(["1"], NOW, () => 0);
 
     const persistIndex = chromeMock.order.findIndex((entry) =>
-      entry.startsWith(`persist:status=running,nextAt=${NOW + SAFE_MIN_MS}`),
+      entry.startsWith(`persist:status=running,nextAt=${NOW + BOOTSTRAP_MIN_MS}`),
     );
     const alarmIndex = chromeMock.order.findIndex((entry) => entry.startsWith("alarm:"));
 

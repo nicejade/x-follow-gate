@@ -240,6 +240,27 @@ export function pickIntervalMs(settings: Settings, random: () => number = Math.r
   return Math.round((min + (max - min) * sample) * 1000);
 }
 
+/** Shorter first-action delay so a confirmed start feels responsive. */
+export const BOOTSTRAP_INTERVAL = {
+  minSec: 15,
+  maxSec: 30,
+} as const;
+
+export function pickBootstrapIntervalMs(random: () => number = Math.random): number {
+  const { minSec, maxSec } = BOOTSTRAP_INTERVAL;
+  const sample = Math.min(1, Math.max(0, random()));
+
+  return Math.round((minSec + (maxSec - minSec) * sample) * 1000);
+}
+
+/** True while every queued item is still untouched — the session's first write. */
+export function isFirstActionOfSession(queue: UnfollowQueue): boolean {
+  return (
+    queue.items.length > 0 &&
+    queue.items.every((item) => item.status === "pending" && item.attempts === 0)
+  );
+}
+
 /**
  * Decides whether the queue may perform an unfollow right now.
  *

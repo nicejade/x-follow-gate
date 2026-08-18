@@ -4,10 +4,10 @@ import { ConfirmQueueDialog } from "@/sidepanel/components/ConfirmQueueDialog";
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import { formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
-import { describeOutcome } from "@/sidepanel/lib/outcome";
+import { describeQueueStart } from "@/sidepanel/lib/outcome";
 import { selectCandidates } from "@/shared/rules";
 import { COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
-import type { ExtensionState, FollowingUser, SyncMeta } from "@/shared/types";
+import type { ExtensionState, FollowingUser, QueuePauseReason, SyncMeta } from "@/shared/types";
 
 interface CleanupViewProps {
   state: ExtensionState;
@@ -15,7 +15,8 @@ interface CleanupViewProps {
   now?: number;
 }
 
-export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps) {
+export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps) {
+  const [now, setNow] = useState(() => nowOverride ?? Date.now());
   const candidates = useMemo(
     () => selectCandidates(Object.values(state.following), state.whitelist),
     [state.following, state.whitelist],
@@ -25,19 +26,37 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
   );
   const [confirming, setConfirming] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [startSuccess, setStartSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     setSelected(new Set(candidates.map((user) => user.userId)));
   }, [candidates]);
 
   const queue = state.unfollowQueue;
+  const queueLive = queue.status === "running" || queue.status === "paused";
   const running = queue.status === "running";
-  // Mirrors the worker, which reads the window rather than the status: a
-  // breaker whose window already closed must not keep Start disabled.
   const cooling = (queue.cooldownUntil ?? 0) > now;
   const syncBlocking = isSyncBlockingQueue(state.syncMeta);
   const signedIn = state.session.account !== null;
   const startDisabled = selected.size === 0 || syncBlocking || !signedIn || cooling || running;
+
+  useEffect(() => {
+    if (nowOverride !== undefined) {
+      return;
+    }
+
+    if (!queueLive && !cooling) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1_000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [cooling, nowOverride, queueLive]);
 
   const remaining = queue.items.filter(
     (item) => item.status === "pending" || item.status === "in-flight",
@@ -52,7 +71,13 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
 
   async function startQueue(userIds: string[]) {
     setStartError(null);
-    setStartError(describeOutcome(await send({ type: "QUEUE_START", userIds }), START_BLOCK_COPY));
+    setStartSuccess(null);
+    const feedback = describeQueueStart(
+      await send({ type: "QUEUE_START", userIds }),
+      START_BLOCK_COPY,
+    );
+    setStartError(feedback.error);
+    setStartSuccess(feedback.success);
   }
 
   return (
@@ -65,27 +90,37 @@ export function CleanupView({ state, send, now = Date.now() }: CleanupViewProps)
         </StatusBanner>
       ) : null}
       {syncBlocking ? <StatusBanner>{syncBlockCopy(state.syncMeta)}</StatusBanner> : null}
+      {startSuccess !== null ? <StatusBanner tone="success">{startSuccess}</StatusBanner> : null}
       {startError !== null ? <StatusBanner tone="danger">{startError}</StatusBanner> : null}
 
-      {running || queue.status === "paused" ? (
+      {queueLive ? (
         <div className="rounded-[var(--radius-panel)] bg-surface px-3 py-3 text-sm">
-          <p>当前：{current ? `@${current.handle}` : "等待中"}</p>
+          <p className="font-medium">{queue.status === "paused" ? "队列已暂停" : "取关进行中"}</p>
+          <p className="mt-1">
+            当前：{current ? `@${current.handle}` : "等待中"}
+            {queue.status === "paused" && queue.pauseReason !== null
+              ? ` · ${queuePauseCopy(queue.pauseReason)}`
+              : null}
+          </p>
           <p className="mt-1 text-muted">
-            剩余 {remaining.length} · 下次 {countdown}s · 时 {hourCount}/{state.settings.hourlyCap}{" "}
-            · 会话 {sessionCount}/{state.settings.sessionCap}
+            剩余 {remaining.length} · 下次 {countdown > 0 ? `${countdown}s` : "即将执行"} · 时{" "}
+            {hourCount}/{state.settings.hourlyCap} · 会话 {sessionCount}/{state.settings.sessionCap}
+          </p>
+          <p className="mt-2 text-xs text-muted">
+            将在可见的 x.com 标签页打开目标主页，点击「正在关注」并确认取关。
           </p>
           <div className="mt-3 flex gap-2">
             <button
               type="button"
               className="min-h-11 flex-1 rounded-[var(--radius-panel)] border border-border"
-              onClick={() => send({ type: "QUEUE_PAUSE", reason: "user" })}
+              onClick={() => void send({ type: "QUEUE_PAUSE", reason: "user" })}
             >
               暂停
             </button>
             <button
               type="button"
               className="min-h-11 flex-1 rounded-[var(--radius-panel)] border border-danger text-danger"
-              onClick={() => send({ type: "QUEUE_STOP" })}
+              onClick={() => void send({ type: "QUEUE_STOP" })}
             >
               停止
             </button>
@@ -156,7 +191,35 @@ const START_BLOCK_COPY: Record<string, string> = {
   cooldown: "仍在安全冷却窗口内，暂时无法开始。",
   "sync-running": "同步仍在进行，请先在洞察页停止本轮同步。",
   "no-candidates": "所选账号已不在候选中，可能已回关或被加入白名单。",
+  "missing-tab": "无法打开 x.com 标签页，请允许扩展打开标签页后重试。",
 };
+
+function queuePauseCopy(reason: QueuePauseReason): string {
+  switch (reason) {
+    case "user":
+      return "已手动暂停";
+    case "session-cap":
+      return "已达本次会话上限";
+    case "hourly-cap":
+      return "已达每小时上限";
+    case "daily-cap":
+      return "已达每日上限";
+    case "outside-active-hours":
+      return "不在允许时段内";
+    case "missing-tab":
+      return "缺少 x.com 标签页";
+    case "auth-required":
+      return "需要重新登录";
+    case "account-mismatch":
+      return "账号已切换";
+    case "rate-limited":
+      return "触发限流";
+    case "consecutive-failures":
+      return "连续失败";
+    default:
+      return reason;
+  }
+}
 
 function syncBlockCopy(syncMeta: SyncMeta): string {
   return syncMeta.pauseReason === "hidden"
