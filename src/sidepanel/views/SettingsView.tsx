@@ -17,11 +17,11 @@ export function SettingsView({ state, send }: SettingsViewProps) {
   return (
     <section className="space-y-8">
       <fieldset className="space-y-6">
-        <div className="space-y-3">
-          <legend className="text-sm font-medium">安全档位</legend>
-          <div className="space-y-1">
+        <div>
+          <legend className="mb-2.5 text-sm font-medium">安全档位</legend>
+          <div>
             {(["safe", "balanced", "custom"] as SafetyPreset[]).map((preset) => (
-              <label key={preset} className="flex min-h-11 items-center gap-2.5 text-sm">
+              <label key={preset} className="flex min-h-8 items-center gap-2.5 text-sm">
                 <input
                   type="radio"
                   name="preset"
@@ -33,15 +33,15 @@ export function SettingsView({ state, send }: SettingsViewProps) {
             ))}
           </div>
           {draft.preset === "custom" ? (
-            <p className="text-xs leading-relaxed text-muted">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               间隔不低于 {HARD_LIMITS.minIntervalSec} 秒；每小时 ≤{HARD_LIMITS.maxHourlyCap}，每天 ≤
               {HARD_LIMITS.maxDailyCap}，每会话 ≤{HARD_LIMITS.maxSessionCap}。起止相同时视为全天开放。
             </p>
           ) : null}
         </div>
 
-        <label className="block space-y-2.5 text-sm">
-          <span id="sync-target-count-label" className="font-medium">
+        <label className="block text-sm">
+          <span id="sync-target-count-label" className="mb-3.5 block font-medium">
             每轮同步人数
           </span>
           <input
@@ -60,7 +60,7 @@ export function SettingsView({ state, send }: SettingsViewProps) {
             }
             className="min-h-11 w-full rounded-[var(--radius-panel)] border border-border bg-surface px-3 text-sm"
           />
-          <span className="block text-xs text-muted">100–5000，默认 1000</span>
+          <span className="mt-1.5 block text-xs text-muted">100–5000，默认 1000</span>
         </label>
 
         <button
