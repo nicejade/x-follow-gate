@@ -345,6 +345,34 @@ describe("Side Panel", () => {
     });
   });
 
+  it("explains an hourly quota hold instead of a raw second countdown", async () => {
+    const now = Date.now();
+    installChrome(
+      signedInState({
+        unfollowQueue: {
+          ...createDefaultState().unfollowQueue,
+          status: "running",
+          sessionStartedAt: now,
+          ownerUserId: "9",
+          nextAt: now + 2_928_000,
+          actionTimestamps: [now - 5_000, now - 4_000, now - 3_000, now - 2_000, now - 1_000],
+          items: [
+            { userId: "2", handle: "alice", status: "pending", attempts: 0, lastCode: null },
+            { userId: "3", handle: "bob", status: "pending", attempts: 0, lastCode: null },
+          ],
+        },
+      }),
+    );
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    expect(screen.getByText("等待每小时上限")).toBeInTheDocument();
+    expect(screen.getByText(/已达每小时上限（5\/5）/)).toBeInTheDocument();
+    expect(screen.getByText(/约 49 分钟后自动继续/)).toBeInTheDocument();
+    expect(screen.getByText(/剩余 2 个 · 本小时 5\/5 · 本次会话 0\/10/)).toBeInTheDocument();
+    expect(screen.getAllByText(/可在「设置」中切换安全档位/).length).toBeGreaterThan(0);
+  });
+
   it("whitelists a candidate from the cleanup list", async () => {
     installChrome(signedInState());
     await renderReadyApp();

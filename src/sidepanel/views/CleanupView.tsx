@@ -3,10 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmQueueDialog } from "@/sidepanel/components/ConfirmQueueDialog";
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
-import { formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
+import { describeQueueProgress, formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
 import { describeOutcome, describeQueueStart } from "@/sidepanel/lib/outcome";
 import { selectCandidates } from "@/shared/rules";
-import { COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
+import { canRunNext, COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
 import type { ExtensionState, FollowingUser, QueuePauseReason, SyncMeta } from "@/shared/types";
 
 interface CleanupViewProps {
@@ -75,6 +75,18 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
   const sessionCount = queue.actionTimestamps.filter(
     (stamp) => stamp >= (queue.sessionStartedAt ?? 0),
   ).length;
+  const hold = canRunNext(queue, now, state.settings);
+  const progress = describeQueueProgress({
+    inFlight,
+    paused: queue.status === "paused",
+    reason: hold.reason,
+    countdownSec: countdown,
+    remaining: remaining.length,
+    hourCount,
+    hourlyCap: state.settings.hourlyCap,
+    sessionCount,
+    sessionCap: state.settings.sessionCap,
+  });
 
   async function dismissCooldown() {
     setDismissMessage(null);
@@ -144,20 +156,16 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
 
       {queueLive ? (
         <div className="rounded-[var(--radius-panel)] bg-surface px-3 py-3 text-sm">
-          <p className="font-medium">{queue.status === "paused" ? "队列已暂停" : "取关进行中"}</p>
+          <p className="font-medium">{progress.title}</p>
           <p className="mt-1">
             当前：{current ? `@${current.handle}` : "等待中"}
             {queue.status === "paused" && queue.pauseReason !== null
               ? ` · ${queuePauseCopy(queue.pauseReason)}`
               : null}
           </p>
-          <p className="mt-1 text-muted">
-            剩余 {remaining.length} · 下次 {countdown > 0 ? `${countdown}s` : "即将执行"} · 时{" "}
-            {hourCount}/{state.settings.hourlyCap} · 会话 {sessionCount}/{state.settings.sessionCap}
-          </p>
-          <p className="mt-2 text-xs text-muted">
-            将在可见的 x.com 标签页打开目标主页，停留 2–10 秒后点击取关；每项间隔 2–10 秒。
-          </p>
+          <p className="mt-1 text-muted">{progress.wait}</p>
+          <p className="mt-1 text-muted">{progress.stats}</p>
+          <p className="mt-2 text-xs text-muted">{progress.hint}</p>
           <div className="mt-3 flex gap-2">
             <button
               type="button"
