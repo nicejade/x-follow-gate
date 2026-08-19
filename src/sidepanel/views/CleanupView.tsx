@@ -312,6 +312,10 @@ function describeDismissCooldown(outcome: Awaited<ReturnType<SendCommand>>): str
     return error;
   }
 
+  if (!outcome.ok) {
+    return "解除失败，请稍后重试。";
+  }
+
   const result = outcome.result;
   if (typeof result === "object" && result !== null && (result as { ok?: unknown }).ok === true) {
     return "熔断已解除，可以重新开始取关。";
@@ -324,6 +328,10 @@ function describeAuthRefresh(outcome: Awaited<ReturnType<SendCommand>>): string 
   const error = describeOutcome(outcome, AUTH_REFRESH_COPY);
   if (error !== null) {
     return error;
+  }
+
+  if (!outcome.ok) {
+    return "已请求刷新，请稍候查看登录状态。";
   }
 
   const result = outcome.result;

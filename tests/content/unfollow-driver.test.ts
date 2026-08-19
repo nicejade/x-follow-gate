@@ -9,6 +9,11 @@ const TARGET: FollowingUser = {
   name: "Alice",
   avatarUrl: null,
   followedBy: false,
+  isBlueVerified: null,
+  protected: null,
+  statusesCount: null,
+  friendsCount: null,
+  followersCount: null,
   syncedAt: 1,
 };
 

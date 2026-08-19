@@ -17,6 +17,11 @@ function target(overrides: Partial<FollowingUser> = {}): FollowingUser {
     name: "Alice",
     avatarUrl: null,
     followedBy: false,
+    isBlueVerified: null,
+    protected: null,
+    statusesCount: null,
+    friendsCount: null,
+    followersCount: null,
     syncedAt: 1,
     ...overrides,
   };
@@ -280,7 +285,7 @@ describe("sendUnfollowOne", () => {
 
   it("does not treat a send as delivered unless the content script accepts it", async () => {
     install(createTabsMock([{ id: 5, url: "https://x.com/alice" }]));
-    tabs.api.sendMessage.mockResolvedValueOnce(undefined);
+    tabs.api.sendMessage.mockResolvedValueOnce({ accepted: false });
 
     await expect(sendUnfollowOne(5, target(), OWNER, { attempts: 1 })).resolves.toBe(false);
   });

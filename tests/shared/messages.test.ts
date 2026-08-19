@@ -1,3 +1,4 @@
+import { createDefaultSettings } from "@/shared/defaults";
 import { assertNever } from "@/shared/messages";
 import type { ExtensionMessage } from "@/shared/messages";
 
@@ -49,6 +50,11 @@ const messages: ExtensionMessage[] = [
         name: "Alice",
         avatarUrl: null,
         followedBy: false,
+        isBlueVerified: null,
+        protected: null,
+        statusesCount: null,
+        friendsCount: null,
+        followersCount: null,
         syncedAt: 1_700_000_000_000,
       },
     ],
@@ -85,6 +91,11 @@ const messages: ExtensionMessage[] = [
       name: "Alice",
       avatarUrl: null,
       followedBy: false,
+      isBlueVerified: null,
+      protected: null,
+      statusesCount: null,
+      friendsCount: null,
+      followersCount: null,
       syncedAt: 1_700_000_000_000,
     },
     account: { userId: "9", handle: "self" },
@@ -95,16 +106,7 @@ const messages: ExtensionMessage[] = [
   },
   {
     type: "SETTINGS_UPDATE",
-    settings: {
-      preset: "safe",
-      intervalMinSec: 90,
-      intervalMaxSec: 150,
-      hourlyCap: 5,
-      dailyCap: 20,
-      sessionCap: 10,
-      syncTargetCount: 1_000,
-      activeHours: { enabled: true, start: "09:00", end: "23:00" },
-    },
+    settings: createDefaultSettings(),
   },
   { type: "WHITELIST_UPDATE", entries: [{ handle: "alice" }] },
 ];

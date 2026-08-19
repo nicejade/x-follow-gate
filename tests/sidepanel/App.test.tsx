@@ -20,6 +20,11 @@ function user(userId: string, handle: string, followedBy: boolean | null): Follo
     name: handle,
     avatarUrl: null,
     followedBy,
+    isBlueVerified: null,
+    protected: null,
+    statusesCount: null,
+    friendsCount: null,
+    followersCount: null,
     syncedAt: 1,
   };
 }

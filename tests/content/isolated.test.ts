@@ -220,6 +220,23 @@ describe("installFollowingBridge", () => {
 
 const ACCOUNT: AccountIdentity = { userId: "9", handle: "self" };
 
+function followingUser(overrides: Partial<FollowingUser> = {}): FollowingUser {
+  return {
+    userId: "1",
+    handle: "alice",
+    name: "Alice",
+    avatarUrl: null,
+    followedBy: false,
+    isBlueVerified: null,
+    protected: null,
+    statusesCount: null,
+    friendsCount: null,
+    followersCount: null,
+    syncedAt: 1,
+    ...overrides,
+  };
+}
+
 /**
  * Deterministic scheduler for the auth probe. It holds a single pending timer and
  * throws if a second one is armed, which is how the tests enforce a finite
@@ -422,14 +439,7 @@ describe("runUnfollowCommand", () => {
 
     const message = {
       type: "UNFOLLOW_ONE" as const,
-      target: {
-        userId: "1",
-        handle: "alice",
-        name: "Alice",
-        avatarUrl: null,
-        followedBy: false,
-        syncedAt: 1,
-      },
+      target: followingUser(),
       account: { userId: "9", handle: "self" },
     };
 
@@ -483,7 +493,7 @@ describe("createRuntimeMessageHandler", () => {
     });
     const listener = createRuntimeMessageHandler({
       authProbe,
-      ensureController: () => ({ start: vi.fn() }) as ScrollController,
+      ensureController: () => ({ start: vi.fn() }) as unknown as ScrollController,
       getController: () => null,
     });
 
@@ -505,20 +515,13 @@ describe("createRuntimeMessageHandler", () => {
     });
     const listener = createRuntimeMessageHandler({
       authProbe,
-      ensureController: () => ({ start: vi.fn() }) as ScrollController,
+      ensureController: () => ({ start: vi.fn() }) as unknown as ScrollController,
       getController: () => null,
       onUnfollowOne,
     });
     const message = {
       type: "UNFOLLOW_ONE" as const,
-      target: {
-        userId: "1",
-        handle: "alice",
-        name: "Alice",
-        avatarUrl: null,
-        followedBy: false,
-        syncedAt: 1,
-      },
+      target: followingUser(),
       account: ACCOUNT,
     };
 
