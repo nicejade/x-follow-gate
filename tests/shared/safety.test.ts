@@ -1,4 +1,4 @@
-import { createDefaultSettings, createDefaultState } from "@/shared/defaults";
+import { createDefaultSettings, createDefaultState, DEFAULT_SCAN_STRATEGIES } from "@/shared/defaults";
 import {
   canRunNext,
   clampSettings,
@@ -26,6 +26,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     sessionCap: 10,
     syncTargetCount: 1_000,
     activeHours: { enabled: false, start: "09:00", end: "23:00" },
+    scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
     ...overrides,
   };
 }
@@ -79,6 +80,7 @@ describe("clampSettings", () => {
       sessionCap: 99,
       syncTargetCount: 1_000,
       activeHours: { enabled: false, start: "09:00", end: "23:00" },
+      scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
     });
 
     expect(result).toMatchObject({
@@ -214,6 +216,31 @@ describe("clampSettings", () => {
     expect(createDefaultSettings().syncTargetCount).toBe(1_000);
   });
 
+  it("defaults scan strategies to P0-only not-following-back", () => {
+    expect(createDefaultSettings().scanStrategies).toEqual(DEFAULT_SCAN_STRATEGIES);
+  });
+
+  it("normalizes scan strategy booleans on clamp", () => {
+    const clamped = clampSettings({
+      ...settings(),
+      scanStrategies: {
+        notFollowingBack: 1 as unknown as boolean,
+        nonBlueVerified: "yes" as unknown as boolean,
+        protected: false,
+        lowTweetCount: undefined as unknown as boolean,
+        followRatio: true,
+      },
+    });
+
+    expect(clamped.scanStrategies).toEqual({
+      notFollowingBack: true,
+      nonBlueVerified: false,
+      protected: false,
+      lowTweetCount: false,
+      followRatio: true,
+    });
+  });
+
   it.each([
     [1, 100],
     [100, 100],
@@ -347,6 +374,7 @@ describe("default persisted state", () => {
       sessionCap: 10,
       syncTargetCount: 1_000,
       activeHours: { enabled: false, start: "09:00", end: "23:00" },
+      scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
     });
     expect(state.unfollowQueue.status).toBe("idle");
     expect(state.unfollowQueue.actionTimestamps).toEqual([]);

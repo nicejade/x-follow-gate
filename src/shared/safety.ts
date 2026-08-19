@@ -5,11 +5,13 @@
  * enforcement: the UI may only tighten them, never loosen them.
  */
 
+import { DEFAULT_SCAN_STRATEGIES } from "./defaults";
 import type {
   ActiveHours,
   QuotaBlockReason,
   QuotaDecision,
   SafetyPreset,
+  ScanStrategies,
   Settings,
   SyncMeta,
   UnfollowQueue,
@@ -63,6 +65,7 @@ export const SAFE_SETTINGS: Settings = {
   ...PRESET_LIMITS.safe,
   syncTargetCount: DEFAULT_SYNC_TARGET_COUNT,
   activeHours: { ...DEFAULT_ACTIVE_HOURS },
+  scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
 };
 
 const PRESETS: readonly SafetyPreset[] = ["safe", "balanced", "custom"];
@@ -117,6 +120,17 @@ function normalizeActiveHours(activeHours: ActiveHours | undefined): ActiveHours
   return { enabled, start, end };
 }
 
+export function clampScanStrategies(value: Partial<ScanStrategies> | undefined): ScanStrategies {
+  const source = value ?? DEFAULT_SCAN_STRATEGIES;
+  return {
+    notFollowingBack: source.notFollowingBack == true,
+    nonBlueVerified: source.nonBlueVerified == true,
+    protected: source.protected == true,
+    lowTweetCount: source.lowTweetCount == true,
+    followRatio: source.followRatio == true,
+  };
+}
+
 /**
  * Applies presets and hard limits. Safe and Balanced always return their exact
  * documented values; only Custom keeps user numbers, clamped to the floors.
@@ -133,7 +147,13 @@ export function clampSettings(settings: Settings): Settings {
     : DEFAULT_SYNC_TARGET_COUNT;
 
   if (preset !== "custom") {
-    return { preset, ...PRESET_LIMITS[preset], syncTargetCount, activeHours };
+    return {
+      preset,
+      ...PRESET_LIMITS[preset],
+      syncTargetCount,
+      activeHours,
+      scanStrategies: clampScanStrategies(settings.scanStrategies),
+    };
   }
 
   const intervalMinSec = Math.max(
@@ -152,6 +172,7 @@ export function clampSettings(settings: Settings): Settings {
     sessionCap: clampInt(settings.sessionCap, 1, HARD_LIMITS.maxSessionCap),
     syncTargetCount,
     activeHours,
+    scanStrategies: clampScanStrategies(settings.scanStrategies),
   };
 }
 

@@ -13,6 +13,21 @@
  */
 export type RelationshipState = true | false | null;
 
+export type ScanStrategyId =
+  | "not-following-back"
+  | "non-blue-verified"
+  | "protected"
+  | "low-tweet-count"
+  | "follow-ratio";
+
+export interface ScanStrategies {
+  notFollowingBack: boolean;
+  nonBlueVerified: boolean;
+  protected: boolean;
+  lowTweetCount: boolean;
+  followRatio: boolean;
+}
+
 export interface FollowingUser {
   userId: string;
   /** Lowercase handle without the leading `@`. */
@@ -20,6 +35,11 @@ export interface FollowingUser {
   name: string;
   avatarUrl: string | null;
   followedBy: RelationshipState;
+  isBlueVerified: boolean | null;
+  protected: boolean | null;
+  statusesCount: number | null;
+  friendsCount: number | null;
+  followersCount: number | null;
   syncedAt: number;
 }
 
@@ -60,6 +80,7 @@ export interface Settings {
   sessionCap: number;
   syncTargetCount: number;
   activeHours: ActiveHours;
+  scanStrategies: ScanStrategies;
 }
 
 export type SyncStatus = "idle" | "running" | "paused" | "completed" | "stopped";

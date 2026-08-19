@@ -6,16 +6,28 @@
  */
 
 import { SAFE_SETTINGS } from "./safety";
-import type { ExtensionState, Settings, SyncMeta, UnfollowQueue } from "./types";
+import type { ExtensionState, ScanStrategies, Settings, SyncMeta, UnfollowQueue } from "./types";
 
 /** Bumped whenever persisted state needs a migration. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /** Storage key holding the whole extension state tree. */
 export const STATE_STORAGE_KEY = "extensionState";
 
+export const DEFAULT_SCAN_STRATEGIES: ScanStrategies = {
+  notFollowingBack: true,
+  nonBlueVerified: false,
+  protected: false,
+  lowTweetCount: false,
+  followRatio: false,
+};
+
 export function createDefaultSettings(): Settings {
-  return { ...SAFE_SETTINGS, activeHours: { ...SAFE_SETTINGS.activeHours } };
+  return {
+    ...SAFE_SETTINGS,
+    activeHours: { ...SAFE_SETTINGS.activeHours },
+    scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
+  };
 }
 
 export function createDefaultSyncMeta(): SyncMeta {

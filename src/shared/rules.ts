@@ -7,6 +7,10 @@
 
 import type { FollowingUser, WhitelistEntry } from "./types";
 
+export const LOW_TWEET_COUNT_THRESHOLD = 10;
+export const FOLLOW_RATIO_MIN_FOLLOWING = 100;
+export const FOLLOW_RATIO_MULTIPLIER = 1.2;
+
 /** Normalizes a handle to lowercase without the leading `@`. */
 export function normalizeHandle(handle: string): string {
   if (typeof handle !== "string") {
