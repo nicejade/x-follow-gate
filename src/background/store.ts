@@ -11,7 +11,12 @@
  *    or tampered record can never persist limits above the P0 safety floors.
  */
 
-import { createDefaultState, STATE_STORAGE_KEY, STATE_VERSION } from "@/shared/defaults";
+import {
+  createDefaultState,
+  DEFAULT_SCAN_STRATEGIES,
+  STATE_STORAGE_KEY,
+  STATE_VERSION,
+} from "@/shared/defaults";
 import { normalizeHandle, normalizeUserId, selectCandidates } from "@/shared/rules";
 import { clampSettings } from "@/shared/safety";
 import type {
@@ -99,9 +104,11 @@ export function applyFollowingBatch(state: ExtensionState, users: FollowingUser[
  * following map or the whitelist.
  */
 export function recomputeCandidates(state: ExtensionState): ExtensionState {
-  const candidates = selectCandidates(Object.values(state.following), state.whitelist).map(
-    (user) => user.userId,
-  );
+  const candidates = selectCandidates(
+    Object.values(state.following),
+    state.whitelist,
+    state.settings.scanStrategies,
+  ).map((user) => user.userId);
 
   return { ...state, candidates };
 }
@@ -171,14 +178,23 @@ function hydrateState(value: unknown): ExtensionState {
  * of seconds delay. v2 turns that window off; an explicit later enable is kept.
  */
 function migrateSettings(settings: Settings, storedVersion: number): Settings {
-  if (storedVersion >= 2) {
-    return settings;
+  let next = settings;
+
+  if (storedVersion < 2) {
+    next = clampSettings({
+      ...next,
+      activeHours: { ...next.activeHours, enabled: false },
+    });
   }
 
-  return clampSettings({
-    ...settings,
-    activeHours: { ...settings.activeHours, enabled: false },
-  });
+  if (storedVersion < 3) {
+    next = clampSettings({
+      ...next,
+      scanStrategies: next.scanStrategies ?? DEFAULT_SCAN_STRATEGIES,
+    });
+  }
+
+  return next;
 }
 
 function hydrateSection<T extends object>(value: unknown, fallback: T): T {
@@ -211,10 +227,30 @@ function hydrateFollowing(value: unknown): Record<string, FollowingUser> {
       continue;
     }
 
-    following[userId] = { ...user, userId, handle: normalizeHandle(user.handle) };
+    following[userId] = {
+      userId,
+      handle: normalizeHandle(user.handle),
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      followedBy: user.followedBy,
+      isBlueVerified: readOptionalTriState(user.isBlueVerified),
+      protected: readOptionalTriState(user.protected),
+      statusesCount: readOptionalCount(user.statusesCount),
+      friendsCount: readOptionalCount(user.friendsCount),
+      followersCount: readOptionalCount(user.followersCount),
+      syncedAt: user.syncedAt,
+    };
   }
 
   return following;
+}
+
+function readOptionalTriState(value: unknown): boolean | null {
+  return value === true || value === false ? value : null;
+}
+
+function readOptionalCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -133,7 +133,11 @@ export function selectQueueTargets(state: ExtensionState, userIds: string[]): Fo
   }
 
   const allowed = new Map(
-    selectCandidates(Object.values(state.following), state.whitelist).map((user) => [
+    selectCandidates(
+      Object.values(state.following),
+      state.whitelist,
+      state.settings.scanStrategies,
+    ).map((user) => [
       user.userId,
       user,
     ]),
@@ -623,7 +627,11 @@ function skipInvalidTargets(state: ExtensionState): ExtensionState {
   }
 
   const allowed = new Set(
-    selectCandidates(Object.values(state.following), state.whitelist).map((user) => user.userId),
+    selectCandidates(
+      Object.values(state.following),
+      state.whitelist,
+      state.settings.scanStrategies,
+    ).map((user) => user.userId),
   );
 
   let changed = false;
@@ -679,7 +687,9 @@ function resolveTarget(state: ExtensionState, userId: string): FollowingUser | n
     return null;
   }
 
-  return selectCandidates([user], state.whitelist).length === 1 ? user : null;
+  return selectCandidates([user], state.whitelist, state.settings.scanStrategies).length === 1
+    ? user
+    : null;
 }
 
 async function applyPausePlan(state: ExtensionState, plan: QueuePlan): Promise<QueuePlan> {

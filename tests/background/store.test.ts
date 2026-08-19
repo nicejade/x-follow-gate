@@ -6,7 +6,7 @@ import {
   replaceState,
   updateState,
 } from "@/background/store";
-import { createDefaultState, STATE_STORAGE_KEY, STATE_VERSION } from "@/shared/defaults";
+import { createDefaultSettings, createDefaultState, DEFAULT_SCAN_STRATEGIES, STATE_STORAGE_KEY, STATE_VERSION } from "@/shared/defaults";
 import { HARD_LIMITS, SAFE_SETTINGS } from "@/shared/safety";
 import type { ExtensionState, FollowingUser, RelationshipState, Settings } from "@/shared/types";
 
@@ -16,7 +16,7 @@ function user(
   userId: string,
   handle: string,
   followedBy: RelationshipState,
-  syncedAt = 1_700_000_000_000,
+  overrides: Partial<FollowingUser> = {},
 ): FollowingUser {
   return {
     userId,
@@ -24,7 +24,13 @@ function user(
     name: `Name ${userId}`,
     avatarUrl: null,
     followedBy,
-    syncedAt,
+    isBlueVerified: null,
+    protected: null,
+    statusesCount: null,
+    friendsCount: null,
+    followersCount: null,
+    syncedAt: 1_700_000_000_000,
+    ...overrides,
   };
 }
 
@@ -38,6 +44,7 @@ function unsafeSettings(): Settings {
     sessionCap: 99,
     syncTargetCount: 1_000,
     activeHours: { enabled: true, start: "09:00", end: "23:00" },
+    scanStrategies: { ...DEFAULT_SCAN_STRATEGIES },
   };
 }
 
@@ -148,6 +155,42 @@ describe("loadState", () => {
 
     expect((await loadState()).settings.activeHours.enabled).toBe(false);
     expect((await loadState()).version).toBe(STATE_VERSION);
+  });
+
+  it("hydrates legacy v2 state with default scan strategies", async () => {
+    const legacy = createDefaultState();
+    legacy.version = 2;
+    delete (legacy.settings as Partial<Settings>).scanStrategies;
+    storage.seed(legacy);
+
+    expect((await loadState()).settings.scanStrategies).toEqual(DEFAULT_SCAN_STRATEGIES);
+    expect((await loadState()).version).toBe(STATE_VERSION);
+  });
+
+  it("normalizes legacy following records with missing profile fields", async () => {
+    storage.seed({
+      ...createDefaultState(),
+      following: {
+        "1": {
+          userId: "1",
+          handle: "alice",
+          name: "Alice",
+          avatarUrl: null,
+          followedBy: false,
+          syncedAt: 1_700_000_000_000,
+        },
+      },
+    });
+
+    const { following } = await loadState();
+
+    expect(following["1"]).toMatchObject({
+      isBlueVerified: null,
+      protected: null,
+      statusesCount: null,
+      friendsCount: null,
+      followersCount: null,
+    });
   });
 
   it("normalizes persisted following records the same way a batch is normalized", async () => {
@@ -283,13 +326,13 @@ describe("applyFollowingBatch", () => {
   });
 
   it("keeps the newer observation when batches arrive out of order", () => {
-    const first = applyFollowingBatch(createDefaultState(), [user("1", "alice", false, 2_000)]);
-    const second = applyFollowingBatch(first, [user("1", "alice", true, 1_000)]);
+    const first = applyFollowingBatch(createDefaultState(), [user("1", "alice", false, { syncedAt: 2_000 })]);
+    const second = applyFollowingBatch(first, [user("1", "alice", true, { syncedAt: 1_000 })]);
 
     expect(second.following["1"]?.followedBy).toBe(false);
     expect(second.following["1"]?.syncedAt).toBe(2_000);
 
-    const third = applyFollowingBatch(second, [user("1", "alice", true, 3_000)]);
+    const third = applyFollowingBatch(second, [user("1", "alice", true, { syncedAt: 3_000 })]);
 
     expect(third.following["1"]?.followedBy).toBe(true);
     expect(third.candidates).toEqual([]);
@@ -335,6 +378,29 @@ describe("recomputeCandidates", () => {
     const protectedState = recomputeCandidates({ ...synced, whitelist: [{ userId: "1" }] });
 
     expect(protectedState.candidates).toEqual(["2"]);
+  });
+
+  it("recomputes candidates using enabled scan strategies", () => {
+    const synced = {
+      ...createDefaultState(),
+      following: {
+        "1": user("1", "mutual-nonblue", true, {
+          isBlueVerified: false,
+          syncedAt: 1,
+        }),
+        "2": user("2", "nf", false, { syncedAt: 2 }),
+      },
+      settings: {
+        ...createDefaultSettings(),
+        scanStrategies: {
+          ...DEFAULT_SCAN_STRATEGIES,
+          notFollowingBack: false,
+          nonBlueVerified: true,
+        },
+      },
+    };
+
+    expect(recomputeCandidates(synced).candidates).toEqual(["1"]);
   });
 });
 
