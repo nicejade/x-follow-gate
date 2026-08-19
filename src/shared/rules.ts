@@ -1,15 +1,29 @@
 /**
- * Pure P0 candidate logic.
+ * Pure candidate logic driven by enabled scan strategies.
  *
- * A user is an unfollow candidate only when the relationship is explicitly
- * "does not follow back" and the user is not whitelisted.
+ * A user enters the unfollow queue when at least one enabled strategy matches
+ * and the user is not whitelisted. Unknown/null profile fields never match.
  */
 
-import type { FollowingUser, WhitelistEntry } from "./types";
+import { DEFAULT_SCAN_STRATEGIES } from "./defaults";
+import type {
+  FollowingUser,
+  ScanStrategyId,
+  ScanStrategies,
+  WhitelistEntry,
+} from "./types";
 
 export const LOW_TWEET_COUNT_THRESHOLD = 10;
 export const FOLLOW_RATIO_MIN_FOLLOWING = 100;
 export const FOLLOW_RATIO_MULTIPLIER = 1.2;
+
+export const SCAN_STRATEGY_LABELS: Record<ScanStrategyId, string> = {
+  "not-following-back": "未回关",
+  "non-blue-verified": "非蓝标",
+  protected: "已锁定",
+  "low-tweet-count": "推文<10",
+  "follow-ratio": "关注/粉丝比",
+};
 
 /** Normalizes a handle to lowercase without the leading `@`. */
 export function normalizeHandle(handle: string): string {
@@ -63,15 +77,57 @@ function matchesIndex(user: FollowingUser, index: WhitelistIndex): boolean {
   return handle !== "" && index.handles.has(handle);
 }
 
+function matchesFollowRatio(user: FollowingUser): boolean {
+  const { friendsCount, followersCount } = user;
+  if (friendsCount === null || followersCount === null) {
+    return false;
+  }
+  if (friendsCount < FOLLOW_RATIO_MIN_FOLLOWING) {
+    return false;
+  }
+  return friendsCount >= followersCount * FOLLOW_RATIO_MULTIPLIER;
+}
+
+export function matchReasons(
+  user: FollowingUser,
+  strategies: ScanStrategies = DEFAULT_SCAN_STRATEGIES,
+): ScanStrategyId[] {
+  const reasons: ScanStrategyId[] = [];
+
+  if (strategies.notFollowingBack && user.followedBy === false) {
+    reasons.push("not-following-back");
+  }
+  if (strategies.nonBlueVerified && user.isBlueVerified === false) {
+    reasons.push("non-blue-verified");
+  }
+  if (strategies.protected && user.protected === true) {
+    reasons.push("protected");
+  }
+  if (
+    strategies.lowTweetCount &&
+    user.statusesCount !== null &&
+    user.statusesCount < LOW_TWEET_COUNT_THRESHOLD
+  ) {
+    reasons.push("low-tweet-count");
+  }
+  if (strategies.followRatio && matchesFollowRatio(user)) {
+    reasons.push("follow-ratio");
+  }
+
+  return reasons;
+}
+
 /**
  * Returns the users that may enter the unfollow queue, preserving input order.
- * An unknown relationship (`null`) is never a candidate.
  */
 export function selectCandidates(
   users: FollowingUser[],
   whitelist: WhitelistEntry[],
+  strategies: ScanStrategies = DEFAULT_SCAN_STRATEGIES,
 ): FollowingUser[] {
   const index = buildWhitelistIndex(whitelist);
 
-  return users.filter((user) => user.followedBy === false && !matchesIndex(user, index));
+  return users.filter(
+    (user) => !matchesIndex(user, index) && matchReasons(user, strategies).length > 0,
+  );
 }
