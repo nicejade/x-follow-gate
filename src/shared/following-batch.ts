@@ -14,7 +14,7 @@
  *    `applyFollowingBatch` forever.
  * 2. `followedBy` stays `null` unless the value is a real boolean. `false` is
  *    what makes an account an unfollow candidate, so it is never inferred.
- * 3. Only the six known fields survive; nothing the page attached is forwarded.
+ * 3. Only the eleven known fields survive; nothing the page attached is forwarded.
  */
 
 import { normalizeHandle, normalizeUserId } from "./rules";
@@ -102,6 +102,11 @@ function normalizeRecord(
     name: readName(value.name, budget),
     avatarUrl: readAvatarUrl(value.avatarUrl, budget),
     followedBy: readFollowedBy(value.followedBy),
+    isBlueVerified: readTriStateBoolean(value.isBlueVerified),
+    protected: readTriStateBoolean(value.protected),
+    statusesCount: readNonNegativeInt(value.statusesCount),
+    friendsCount: readNonNegativeInt(value.friendsCount),
+    followersCount: readNonNegativeInt(value.followersCount),
     syncedAt,
   };
 }
@@ -159,4 +164,15 @@ function readAvatarUrl(value: unknown, budget: FollowingBatchLimits): string | n
 
 function readFollowedBy(value: unknown): RelationshipState {
   return typeof value === "boolean" ? value : null;
+}
+
+function readTriStateBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function readNonNegativeInt(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return Math.floor(value);
 }

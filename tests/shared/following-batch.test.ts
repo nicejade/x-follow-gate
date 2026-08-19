@@ -196,14 +196,65 @@ describe("validateFollowingUsers", () => {
     expect(users[0]).toMatchObject({ handle: "first", followedBy: true });
   });
 
+  it("preserves nullable scan fields when they are valid", () => {
+    const users = validateFollowingUsers(
+      [
+        pageUser({
+          isBlueVerified: false,
+          protected: true,
+          statusesCount: 2,
+          friendsCount: 150,
+          followersCount: 50,
+        }),
+      ],
+      TRUSTED_TIME,
+    );
+
+    expect(users[0]).toMatchObject({
+      isBlueVerified: false,
+      protected: true,
+      statusesCount: 2,
+      friendsCount: 150,
+      followersCount: 50,
+    });
+  });
+
+  it("coerces invalid scan fields to null", () => {
+    const users = validateFollowingUsers(
+      [
+        pageUser({
+          isBlueVerified: "false",
+          protected: 1,
+          statusesCount: -3,
+          friendsCount: Number.NaN,
+          followersCount: "10",
+        }),
+      ],
+      TRUSTED_TIME,
+    );
+
+    expect(users[0]).toMatchObject({
+      isBlueVerified: null,
+      protected: null,
+      statusesCount: null,
+      friendsCount: null,
+      followersCount: null,
+    });
+  });
+
   it("never returns extra properties the page attached", () => {
     const users = validateFollowingUsers([pageUser({ cookie: "auth_token=secret" })], TRUSTED_TIME);
 
     expect(Object.keys(users[0] ?? {}).sort()).toEqual([
       "avatarUrl",
       "followedBy",
+      "followersCount",
+      "friendsCount",
       "handle",
+      "isBlueVerified",
       "name",
+      "protected",
+      "statusesCount",
       "syncedAt",
       "userId",
     ]);
