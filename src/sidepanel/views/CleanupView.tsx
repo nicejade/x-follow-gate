@@ -3,9 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmQueueDialog } from "@/sidepanel/components/ConfirmQueueDialog";
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
-import { describeQueueProgress, formatEta, intervalBand, PRESET_LABELS } from "@/sidepanel/lib/metrics";
+import {
+  describeQueueProgress,
+  enabledStrategyCount,
+  formatEta,
+  intervalBand,
+  PRESET_LABELS,
+} from "@/sidepanel/lib/metrics";
 import { describeOutcome, describeQueueStart } from "@/sidepanel/lib/outcome";
-import { selectCandidates } from "@/shared/rules";
+import { matchReasons, SCAN_STRATEGY_LABELS, selectCandidates } from "@/shared/rules";
 import { canRunNext, COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
 import type { ExtensionState, FollowingUser, QueuePauseReason, SyncMeta } from "@/shared/types";
 
@@ -18,9 +24,15 @@ interface CleanupViewProps {
 export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps) {
   const [now, setNow] = useState(() => nowOverride ?? Date.now());
   const candidates = useMemo(
-    () => selectCandidates(Object.values(state.following), state.whitelist),
-    [state.following, state.whitelist],
+    () =>
+      selectCandidates(
+        Object.values(state.following),
+        state.whitelist,
+        state.settings.scanStrategies,
+      ),
+    [state.following, state.whitelist, state.settings.scanStrategies],
   );
+  const enabledCount = enabledStrategyCount(state.settings.scanStrategies);
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(candidates.map((user) => user.userId)),
   );
@@ -117,7 +129,7 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
 
   return (
     <section className="space-y-4">
-      <p className="text-sm text-muted">未回关 · 已排除白名单</p>
+      <p className="text-sm text-muted">已启用 {enabledCount} 条策略 · 已排除白名单</p>
 
       {cooling ? (
         <StatusBanner tone="danger">
@@ -199,6 +211,7 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
           <CandidateRow
             key={user.userId}
             user={user}
+            reasons={matchReasons(user, state.settings.scanStrategies)}
             checked={selected.has(user.userId)}
             onToggle={() => {
               setSelected((currentSet) => {
@@ -341,12 +354,14 @@ function pauseCopy(reason: ExtensionState["unfollowQueue"]["pauseReason"]): stri
 
 function CandidateRow({
   user,
+  reasons,
   checked,
   onToggle,
   onWhitelist,
   onRemove,
 }: {
   user: FollowingUser;
+  reasons: ReturnType<typeof matchReasons>;
   checked: boolean;
   onToggle: () => void;
   onWhitelist: () => void;
@@ -370,7 +385,12 @@ function CandidateRow({
       )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm leading-tight">{user.name}</p>
-        <p className="truncate text-xs leading-tight text-muted">@{user.handle} · 未回关</p>
+        <p className="truncate text-xs leading-tight text-muted">
+          @{user.handle}
+          {reasons.length > 0
+            ? ` · ${reasons.map((id) => SCAN_STRATEGY_LABELS[id]).join(" · ")}`
+            : ""}
+        </p>
       </div>
       <div className="flex shrink-0 flex-col gap-0">
         <button

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { StatusBanner } from "@/sidepanel/components/StatusBanner";
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
-import { formatPercent, insightMetrics } from "@/sidepanel/lib/metrics";
+import { cleanupCandidateCount, formatPercent, insightMetrics } from "@/sidepanel/lib/metrics";
 import { describeOutcome } from "@/sidepanel/lib/outcome";
 import type { ExtensionState } from "@/shared/types";
 
@@ -56,7 +56,7 @@ export function InsightView({ state, send }: InsightViewProps) {
 
       <div className="grid grid-cols-2 gap-2">
         <Metric label="已同步" value={String(metrics.synced)} />
-        <Metric label="未回关" value={String(metrics.nonMutual)} />
+        <Metric label="待清理候选" value={String(cleanupCandidateCount(state))} />
         <Metric label="互关率" value={formatPercent(metrics.mutualRate)} />
         <Metric label="关系未知" value={String(metrics.unknown)} />
       </div>

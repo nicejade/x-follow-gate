@@ -136,7 +136,7 @@ describe("Side Panel", () => {
     await renderReadyApp();
     expect(screen.getByText("已同步")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("未回关")).toBeInTheDocument();
+    expect(screen.getByText("待清理候选")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("互关率")).toBeInTheDocument();
     expect(screen.getByText("33%")).toBeInTheDocument();

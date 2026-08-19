@@ -1,4 +1,45 @@
-import { describeQueueProgress, formatWaitDuration } from "@/sidepanel/lib/metrics";
+import { cleanupCandidateCount, describeQueueProgress, formatWaitDuration } from "@/sidepanel/lib/metrics";
+import { createDefaultSettings, createDefaultState, DEFAULT_SCAN_STRATEGIES } from "@/shared/defaults";
+import type { FollowingUser } from "@/shared/types";
+
+function user(
+  userId: string,
+  handle: string,
+  followedBy: FollowingUser["followedBy"],
+  overrides: Partial<FollowingUser> = {},
+): FollowingUser {
+  return {
+    userId,
+    handle,
+    name: handle,
+    avatarUrl: null,
+    followedBy,
+    isBlueVerified: null,
+    protected: null,
+    statusesCount: null,
+    friendsCount: null,
+    followersCount: null,
+    syncedAt: 1,
+    ...overrides,
+  };
+}
+
+describe("cleanupCandidateCount", () => {
+  it("counts cleanup candidates using scan strategies", () => {
+    const state = {
+      ...createDefaultState(),
+      following: {
+        "1": user("1", "mutual-non-blue", true, { isBlueVerified: false }),
+        "2": user("2", "mutual-blue", true, { isBlueVerified: true }),
+      },
+      settings: {
+        ...createDefaultSettings(),
+        scanStrategies: { ...DEFAULT_SCAN_STRATEGIES, notFollowingBack: false, nonBlueVerified: true },
+      },
+    };
+    expect(cleanupCandidateCount(state)).toBe(1);
+  });
+});
 
 describe("formatWaitDuration", () => {
   it("uses seconds below one minute and minutes above it", () => {

@@ -1,3 +1,4 @@
+import { selectCandidates } from "@/shared/rules";
 import type { ExtensionState, QuotaBlockReason, SafetyPreset } from "@/shared/types";
 import { PRESET_LIMITS } from "@/shared/safety";
 
@@ -24,6 +25,20 @@ export function startOfLocalDay(now: number): number {
 export function todayUnfollowCount(state: ExtensionState, now: number): number {
   const start = startOfLocalDay(now);
   return state.unfollowQueue.actionTimestamps.filter((stamp) => stamp >= start).length;
+}
+
+export function cleanupCandidateCount(state: ExtensionState): number {
+  return selectCandidates(
+    Object.values(state.following),
+    state.whitelist,
+    state.settings.scanStrategies,
+  ).length;
+}
+
+export function enabledStrategyCount(
+  strategies: ExtensionState["settings"]["scanStrategies"],
+): number {
+  return Object.values(strategies).filter(Boolean).length;
 }
 
 export function insightMetrics(state: ExtensionState) {
