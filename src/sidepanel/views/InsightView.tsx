@@ -17,20 +17,36 @@ const SYNC_BLOCK_COPY: Record<string, string> = {
   "missing-tab": "无法打开关注列表标签页，请手动打开后重试。",
 };
 
+const SYNC_STARTED_COPY = "已开始同步。请保持关注列表标签页在前。";
+
+function syncStamp(state: ExtensionState): string {
+  return `${state.syncMeta.status}:${state.syncMeta.updatedAt ?? 0}`;
+}
+
 export function InsightView({ state, send }: InsightViewProps) {
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [startedFromStamp, setStartedFromStamp] = useState<string | null>(null);
+  const [forceReload, setForceReload] = useState(false);
   const metrics = insightMetrics(state);
   const syncing = state.syncMeta.status === "running";
-  // A paused round still owns the tab, so it needs an explicit way to end.
   const syncActive = syncing || state.syncMeta.status === "paused";
   const queueBusy =
     state.unfollowQueue.status === "running" || state.unfollowQueue.status === "cooldown";
   const signedIn = state.session.account !== null;
+  const awaitingWorker = startedFromStamp === syncStamp(state);
+  const hideStaleRoundBanner = syncing || pending || awaitingWorker;
 
   async function startSync() {
+    const fromStamp = syncStamp(state);
     setSyncError(null);
-    const outcome = await send({ type: "SYNC_START" });
-    setSyncError(describeOutcome(outcome, SYNC_BLOCK_COPY));
+    setStartedFromStamp(null);
+    setPending(true);
+    const outcome = await send({ type: "SYNC_START", forceReload });
+    const error = describeOutcome(outcome, SYNC_BLOCK_COPY);
+    setSyncError(error);
+    setPending(false);
+    setStartedFromStamp(error === null ? fromStamp : null);
   }
 
   return (
@@ -39,14 +55,16 @@ export function InsightView({ state, send }: InsightViewProps) {
         <StatusBanner tone="danger">请先在 x.com 登录，扩展会复用当前会话。</StatusBanner>
       ) : null}
       {syncError !== null ? <StatusBanner tone="danger">{syncError}</StatusBanner> : null}
+      {awaitingWorker ? <StatusBanner tone="success">{SYNC_STARTED_COPY}</StatusBanner> : null}
       {queueBusy ? <StatusBanner>取关队列进行中，同步已暂停以免并行请求。</StatusBanner> : null}
-      {state.syncMeta.pauseReason === "hidden" ? (
+      {state.syncMeta.pauseReason === "hidden" && !hideStaleRoundBanner ? (
         <StatusBanner>关注列表标签页已隐藏超过 45 秒，滚动已暂停。请保持该标签在前。</StatusBanner>
       ) : null}
-      {state.syncMeta.pauseReason === "budget" ? (
+      {state.syncMeta.pauseReason === "budget" && !hideStaleRoundBanner ? (
         <StatusBanner>本轮同步已达到人数上限，可继续发起下一轮。</StatusBanner>
       ) : null}
-      {state.syncMeta.pauseReason === "stalled" || state.syncMeta.status === "completed" ? (
+      {!hideStaleRoundBanner &&
+      (state.syncMeta.pauseReason === "stalled" || state.syncMeta.status === "completed") ? (
         <StatusBanner>
           {state.syncMeta.likelyComplete
             ? "列表可能已到底，同步结束。"
@@ -68,11 +86,22 @@ export function InsightView({ state, send }: InsightViewProps) {
         </p>
       ) : null}
 
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted select-none">
+        <input
+          type="checkbox"
+          checked={forceReload}
+          onChange={(e) => setForceReload(e.target.checked)}
+          disabled={syncing || pending}
+          className="size-4 accent-accent"
+        />
+        强制重新加载关注列表
+      </label>
+
       <div className="flex gap-2">
         <button
           type="button"
           className="min-h-11 flex-1 rounded-[var(--radius-panel)] bg-accent px-4 text-sm font-medium text-bg disabled:opacity-40"
-          disabled={!signedIn || queueBusy || syncing}
+          disabled={!signedIn || queueBusy || syncing || pending || awaitingWorker}
           onClick={() => void startSync()}
         >
           同步 Following

@@ -60,7 +60,7 @@ export async function handleMessage(
     case "STATE_GET":
       return await loadState();
     case "SYNC_START":
-      return await startSync();
+      return await startSync(Date.now(), { forceReload: message.forceReload });
     case "SYNC_PAUSE":
       await pauseSync(message.reason);
       return { paused: true };

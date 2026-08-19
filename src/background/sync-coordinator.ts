@@ -127,12 +127,33 @@ async function findAnyXTab(): Promise<TabLike | null> {
   return tabs.find((tab) => typeof tab.id === "number" && isXUrl(tab.url)) ?? null;
 }
 
-async function ensureFollowingTab(handle: string): Promise<number | null> {
+/**
+ * A Following tab that already hit the end of the list cannot grow in place:
+ * the page sits at the bottom and the content script's discovery set already
+ * contains everyone seen this session. Reloading is the only way a second
+ * round starts from the top with a fresh GraphQL timeline.
+ *
+ * A budget pause is the opposite: the user asked for the next slice of the
+ * same list, so the current scroll position must be kept.
+ */
+export function shouldReloadFollowingPage(meta: SyncMeta): boolean {
+  return (
+    meta.likelyComplete === true || meta.status === "completed" || meta.pauseReason === "stalled"
+  );
+}
+
+async function ensureFollowingTab(
+  handle: string,
+  options: { reload?: boolean } = {},
+): Promise<number | null> {
   const url = followingPageUrl(handle);
 
   try {
     const open = await findFollowingTab(handle);
     if (typeof open?.id === "number") {
+      if (options.reload === true) {
+        await chrome.tabs.reload(open.id);
+      }
       await chrome.tabs.update(open.id, { active: true });
 
       return open.id;
@@ -223,7 +244,10 @@ async function markPaused(reason: SyncPauseReason, now: number): Promise<void> {
  * Starts a scroll round for the signed-in account. Mutual exclusion with the
  * unfollow queue is enforced before any tab is touched.
  */
-export async function startSync(now: number = Date.now()): Promise<StartSyncResult> {
+export async function startSync(
+  now: number = Date.now(),
+  options: { forceReload?: boolean } = {},
+): Promise<StartSyncResult> {
   const state = await loadState();
 
   if (isQueueBlockingSync(state.unfollowQueue, now)) {
@@ -239,7 +263,9 @@ export async function startSync(now: number = Date.now()): Promise<StartSyncResu
     return { ok: false, reason: "auth" };
   }
 
-  const tabId = await ensureFollowingTab(account.handle);
+  const tabId = await ensureFollowingTab(account.handle, {
+    reload: options.forceReload === true || shouldReloadFollowingPage(state.syncMeta),
+  });
   if (tabId === null) {
     await markPaused("missing-tab", now);
 

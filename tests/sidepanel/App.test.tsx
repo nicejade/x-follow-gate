@@ -150,6 +150,54 @@ describe("Side Panel", () => {
     expect(screen.getByText(/将打开关注列表并渐进滚动采集|已发现/)).toBeInTheDocument();
   });
 
+  it("acknowledges a second Following sync instead of looking idle", async () => {
+    installChrome(
+      signedInState({
+        syncMeta: {
+          ...createDefaultState().syncMeta,
+          status: "completed",
+          likelyComplete: true,
+          pauseReason: "stalled",
+          discoveredCount: 4,
+        },
+      }),
+    );
+    commandReplies.set("SYNC_START", { ok: true, result: { ok: true, tabId: 7, delivered: true } });
+    await renderReadyApp();
+
+    fireEvent.click(screen.getByRole("button", { name: "同步 Following" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual(expect.objectContaining({ type: "SYNC_START" }));
+      expect(screen.getByText(/已开始同步/)).toBeInTheDocument();
+    });
+  });
+
+  it("sends forceReload when the checkbox is checked", async () => {
+    installChrome(signedInState());
+    commandReplies.set("SYNC_START", { ok: true, result: { ok: true, tabId: 7, delivered: true } });
+    await renderReadyApp();
+
+    fireEvent.click(screen.getByLabelText("强制重新加载关注列表"));
+    fireEvent.click(screen.getByRole("button", { name: "同步 Following" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "SYNC_START", forceReload: true });
+    });
+  });
+
+  it("sends forceReload false when the checkbox is unchecked", async () => {
+    installChrome(signedInState());
+    commandReplies.set("SYNC_START", { ok: true, result: { ok: true, tabId: 7, delivered: true } });
+    await renderReadyApp();
+
+    fireEvent.click(screen.getByRole("button", { name: "同步 Following" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "SYNC_START", forceReload: false });
+    });
+  });
+
   it("pauses a live sync and explains a hidden tab", async () => {
     const syncing = signedInState({
       syncMeta: {

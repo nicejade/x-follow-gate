@@ -29,7 +29,7 @@ export type SyncPauseCommandReason = Extract<
 
 export type ExtensionMessage =
   | { type: "STATE_GET" }
-  | { type: "SYNC_START" }
+  | { type: "SYNC_START"; forceReload?: boolean }
   | { type: "SYNC_PAUSE"; reason: SyncPauseCommandReason }
   | { type: "SYNC_STOP" }
   | { type: "FOLLOWING_BATCH"; users: FollowingUser[] }

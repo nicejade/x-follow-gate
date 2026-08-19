@@ -38,7 +38,7 @@ function routeMessage(message: ExtensionMessage): ExtensionMessage["type"] {
 
 const messages: ExtensionMessage[] = [
   { type: "STATE_GET" },
-  { type: "SYNC_START" },
+  { type: "SYNC_START", forceReload: true },
   { type: "SYNC_PAUSE", reason: "hidden" },
   { type: "SYNC_STOP" },
   {

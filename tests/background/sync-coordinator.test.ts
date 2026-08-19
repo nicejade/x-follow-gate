@@ -104,10 +104,14 @@ function createTabsMock(initial: Array<Partial<FakeTab>> = []) {
   const messages: Array<{ tabId: number; message: ExtensionMessage }> = [];
   const created: Array<{ url: string; active: boolean }> = [];
   const updates: Array<{ tabId: number; url?: string; active?: boolean }> = [];
+  const reloads: number[] = [];
   let deliverable = true;
 
   const api = {
     query: vi.fn(async () => tabs.map((tab) => ({ ...tab }))),
+    reload: vi.fn(async (tabId: number) => {
+      reloads.push(tabId);
+    }),
     create: vi.fn(async (properties: { url?: string; active?: boolean }) => {
       const tab: FakeTab = {
         id: nextId++,
@@ -149,6 +153,7 @@ function createTabsMock(initial: Array<Partial<FakeTab>> = []) {
     messages,
     created,
     updates,
+    reloads,
     breakDelivery() {
       deliverable = false;
     },
@@ -240,11 +245,68 @@ describe("startSync", () => {
 
     expect(result).toMatchObject({ ok: true, tabId: 7 });
     expect(tabs.api.create).not.toHaveBeenCalled();
+    expect(tabs.api.reload).not.toHaveBeenCalled();
     expect(tabs.updates).toEqual([{ tabId: 7, active: true }]);
     expect(tabs.messages).toContainEqual({
       tabId: 7,
       message: { type: "SCROLL_SESSION_START", syncTargetCount: 2_000 },
     });
+  });
+
+  it("reloads a Following tab that already reached the end of the list", async () => {
+    storage.seed(
+      signedInState({
+        syncMeta: {
+          ...createDefaultState().syncMeta,
+          status: "completed",
+          likelyComplete: true,
+          pauseReason: "stalled",
+          discoveredCount: 1_058,
+        },
+      }),
+    );
+
+    const result = await startSync(NOW);
+
+    expect(result).toMatchObject({ ok: true, tabId: 7 });
+    expect(tabs.reloads).toEqual([7]);
+    expect(tabs.updates).toEqual([{ tabId: 7, active: true }]);
+    expect(tabs.api.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current scroll position when continuing after a person-count budget", async () => {
+    storage.seed(
+      signedInState({
+        syncMeta: {
+          ...createDefaultState().syncMeta,
+          status: "paused",
+          pauseReason: "budget",
+          discoveredCount: 1_000,
+        },
+      }),
+    );
+
+    await startSync(NOW);
+
+    expect(tabs.reloads).toEqual([]);
+    expect(tabs.updates).toEqual([{ tabId: 7, active: true }]);
+  });
+
+  it("reloads when forceReload is true even if the previous round was idle", async () => {
+    storage.seed(signedInState());
+
+    const result = await startSync(NOW, { forceReload: true });
+
+    expect(result).toMatchObject({ ok: true, tabId: 7 });
+    expect(tabs.reloads).toEqual([7]);
+  });
+
+  it("does not reload when forceReload is false and previous round was idle", async () => {
+    storage.seed(signedInState());
+
+    await startSync(NOW, { forceReload: false });
+
+    expect(tabs.reloads).toEqual([]);
   });
 
   it("recognizes the Following tab across hosts, casing and a trailing slash", async () => {
