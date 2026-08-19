@@ -1,9 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
-import { normalizeHandle } from "@/shared/rules";
+import {
+  FOLLOW_RATIO_MIN_FOLLOWING,
+  FOLLOW_RATIO_MULTIPLIER,
+  LOW_TWEET_COUNT_THRESHOLD,
+  normalizeHandle,
+} from "@/shared/rules";
 import { HARD_LIMITS, PRESET_LIMITS, clampSettings } from "@/shared/safety";
-import type { ExtensionState, SafetyPreset } from "@/shared/types";
+import type { ExtensionState, SafetyPreset, ScanStrategies } from "@/shared/types";
+
+const SCAN_STRATEGY_OPTIONS: Array<{
+  key: keyof ScanStrategies;
+  label: string;
+  hint?: string;
+}> = [
+  { key: "notFollowingBack", label: "对方未回关" },
+  { key: "nonBlueVerified", label: "对方非蓝标" },
+  { key: "protected", label: "对方已锁定 / 私密" },
+  {
+    key: "lowTweetCount",
+    label: "推文极少",
+    hint: `< ${LOW_TWEET_COUNT_THRESHOLD} 条`,
+  },
+  {
+    key: "followRatio",
+    label: "关注远大于粉丝",
+    hint: `关注 ≥ ${FOLLOW_RATIO_MIN_FOLLOWING} 且 ≥ 粉丝 × ${FOLLOW_RATIO_MULTIPLIER}`,
+  },
+];
 
 function presetPolicyCopy(preset: SafetyPreset): string {
   if (preset === "custom") {
@@ -22,6 +47,10 @@ interface SettingsViewProps {
 export function SettingsView({ state, send }: SettingsViewProps) {
   const [handle, setHandle] = useState("");
   const [draft, setDraft] = useState(state.settings);
+
+  useEffect(() => {
+    setDraft(state.settings);
+  }, [state.settings]);
 
   return (
     <section className="space-y-8">
@@ -68,6 +97,39 @@ export function SettingsView({ state, send }: SettingsViewProps) {
           />
           <span className="mt-1.5 block text-xs text-muted">100–5000，默认 1000</span>
         </label>
+
+        <div>
+          <legend className="mb-2.5 text-sm font-medium">扫描策略</legend>
+          <div className="space-y-1">
+            {SCAN_STRATEGY_OPTIONS.map(({ key, label, hint }) => (
+              <label key={key} className="flex min-h-8 items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.scanStrategies[key]}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      scanStrategies: {
+                        ...current.scanStrategies,
+                        [key]: event.target.checked,
+                      },
+                    }))
+                  }
+                  className="mt-1"
+                />
+                <span>
+                  {label}
+                  {hint ? (
+                    <span className="ml-1 text-xs text-muted">({hint})</span>
+                  ) : null}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            满足任一已勾选规则即进入待清理列表；白名单始终排除。
+          </p>
+        </div>
 
         <button
           type="button"

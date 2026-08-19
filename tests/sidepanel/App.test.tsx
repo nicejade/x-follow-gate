@@ -482,4 +482,20 @@ describe("Side Panel", () => {
     });
     expect(input).toHaveValue(5_000);
   });
+
+  it("persists scan strategy toggles from settings", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /对方非蓝标/ }));
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(messages).toContainEqual({
+      type: "SETTINGS_UPDATE",
+      settings: expect.objectContaining({
+        scanStrategies: expect.objectContaining({ nonBlueVerified: true }),
+      }),
+    });
+  });
 });
