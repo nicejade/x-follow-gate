@@ -37,7 +37,9 @@
                               "following": true,
                               "followed_by": true
                             },
+                            "is_blue_verified": true,
                             "legacy": {
+                              "statuses_count": 42,
                               "followers_count": 0,
                               "friends_count": 0
                             }
@@ -67,7 +69,11 @@
                               "screen_name": "Beta_User",
                               "profile_image_url_https": "https://pbs.twimg.com/profile_images/1000000000000000002/synthetic_normal.jpg",
                               "following": true,
-                              "followed_by": false
+                              "followed_by": false,
+                              "protected": true,
+                              "statuses_count": 5,
+                              "friends_count": 200,
+                              "followers_count": 50
                             }
                           }
                         }

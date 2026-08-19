@@ -279,6 +279,11 @@ function normalizeUser(
     name: readName(raw, budget),
     avatarUrl: readAvatarUrl(raw, budget),
     followedBy: readFollowedBy(raw),
+    isBlueVerified: readIsBlueVerified(raw),
+    protected: readProtected(raw),
+    statusesCount: readStatusesCount(raw),
+    friendsCount: readFriendsCount(raw),
+    followersCount: readFollowersCount(raw),
     syncedAt: now,
   };
 }
@@ -386,6 +391,45 @@ function readFollowedBy(raw: PlainObject): RelationshipState {
   return readBoolean(readObject(raw, "legacy"), "followed_by");
 }
 
+function readTriStateBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function readNonNegativeInt(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return Math.floor(value);
+}
+
+function readIsBlueVerified(raw: PlainObject): boolean | null {
+  return readTriStateBoolean(raw.is_blue_verified);
+}
+
+function readProtected(raw: PlainObject): boolean | null {
+  const legacy = readObject(raw, "legacy");
+  const fromLegacy = legacy === null ? null : readTriStateBoolean(legacy.protected);
+  if (fromLegacy !== null) {
+    return fromLegacy;
+  }
+  return readTriStateBoolean(raw.protected);
+}
+
+function readStatusesCount(raw: PlainObject): number | null {
+  const legacy = readObject(raw, "legacy");
+  return legacy === null ? null : readNonNegativeInt(legacy.statuses_count);
+}
+
+function readFriendsCount(raw: PlainObject): number | null {
+  const legacy = readObject(raw, "legacy");
+  return legacy === null ? null : readNonNegativeInt(legacy.friends_count);
+}
+
+function readFollowersCount(raw: PlainObject): number | null {
+  const legacy = readObject(raw, "legacy");
+  return legacy === null ? null : readNonNegativeInt(legacy.followers_count);
+}
+
 /**
  * Deduplicates by user id. The first occurrence wins and later duplicates only
  * fill gaps, so a repeated entry can never downgrade an already known
@@ -403,5 +447,10 @@ function collect(found: Map<string, FollowingUser>, user: FollowingUser): void {
     name: existing.name === "" ? user.name : existing.name,
     avatarUrl: existing.avatarUrl ?? user.avatarUrl,
     followedBy: existing.followedBy ?? user.followedBy,
+    isBlueVerified: existing.isBlueVerified ?? user.isBlueVerified,
+    protected: existing.protected ?? user.protected,
+    statusesCount: existing.statusesCount ?? user.statusesCount,
+    friendsCount: existing.friendsCount ?? user.friendsCount,
+    followersCount: existing.followersCount ?? user.followersCount,
   });
 }

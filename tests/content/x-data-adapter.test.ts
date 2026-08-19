@@ -15,6 +15,14 @@ import fixture from "../fixtures/following-response.json";
 
 const NOW = 1_700_000_000_000;
 
+const UNKNOWN_PROFILE = {
+  isBlueVerified: null,
+  protected: null,
+  statusesCount: null,
+  friendsCount: null,
+  followersCount: null,
+} as const;
+
 /** Wraps a `user_results.result` payload in a timeline item entry. */
 function userEntry(result: unknown, entryId = "user-entry"): unknown {
   return {
@@ -74,6 +82,11 @@ describe("extractFollowingUsers · sanitized fixture", () => {
         name: "Synthetic Alpha",
         avatarUrl: "https://pbs.twimg.com/profile_images/1000000000000000001/synthetic_normal.jpg",
         followedBy: true,
+        isBlueVerified: true,
+        protected: null,
+        statusesCount: 42,
+        friendsCount: 0,
+        followersCount: 0,
         syncedAt: NOW,
       },
       {
@@ -82,6 +95,11 @@ describe("extractFollowingUsers · sanitized fixture", () => {
         name: "Synthetic Beta",
         avatarUrl: "https://pbs.twimg.com/profile_images/1000000000000000002/synthetic_normal.jpg",
         followedBy: false,
+        isBlueVerified: null,
+        protected: true,
+        statusesCount: 5,
+        friendsCount: 200,
+        followersCount: 50,
         syncedAt: NOW,
       },
       {
@@ -90,6 +108,7 @@ describe("extractFollowingUsers · sanitized fixture", () => {
         name: "Synthetic Gamma",
         avatarUrl: null,
         followedBy: null,
+        ...UNKNOWN_PROFILE,
         syncedAt: NOW,
       },
     ]);
@@ -158,6 +177,94 @@ describe("extractFollowingUsers · relationship state", () => {
     );
 
     expect(users[0]?.followedBy).toBe(true);
+  });
+});
+
+describe("extractFollowingUsers · scan strategy profile fields", () => {
+  it("reads is_blue_verified as a boolean", () => {
+    expect(
+      extractFrom(modernUser({ is_blue_verified: true }))[0]?.isBlueVerified,
+    ).toBe(true);
+    expect(
+      extractFrom(modernUser({ is_blue_verified: false }))[0]?.isBlueVerified,
+    ).toBe(false);
+    expect(extractFrom(modernUser({ is_blue_verified: "true" }))[0]?.isBlueVerified).toBeNull();
+  });
+
+  it("reads legacy protected and counts", () => {
+    const users = extractFrom(
+      modernUser({
+        legacy: {
+          protected: true,
+          statuses_count: 3,
+          friends_count: 500,
+          followers_count: 100,
+        },
+      }),
+    );
+    expect(users[0]).toMatchObject({
+      protected: true,
+      statusesCount: 3,
+      friendsCount: 500,
+      followersCount: 100,
+    });
+  });
+
+  it("rejects invalid profile field values", () => {
+    const users = extractFrom(
+      modernUser({
+        is_blue_verified: "false",
+        protected: 1,
+        legacy: {
+          protected: true,
+          statuses_count: -3,
+          friends_count: Number.NaN,
+          followers_count: "10",
+        },
+      }),
+    );
+
+    expect(users[0]).toMatchObject({
+      isBlueVerified: null,
+      protected: true,
+      statusesCount: null,
+      friendsCount: null,
+      followersCount: null,
+    });
+  });
+
+  it("does not downgrade known fields when merging duplicates", () => {
+    const payload = timelinePayload([
+      userEntry(
+        modernUser({
+          rest_id: "1000000000000000001",
+          relationship_perspectives: { followed_by: false },
+          is_blue_verified: false,
+          legacy: {
+            protected: true,
+            statuses_count: 2,
+            friends_count: 150,
+            followers_count: 50,
+          },
+        }),
+        "user-first",
+      ),
+      userEntry(
+        modernUser({
+          rest_id: "1000000000000000001",
+          relationship_perspectives: { followed_by: false },
+        }),
+        "user-repeat",
+      ),
+    ]);
+
+    expect(extractFollowingUsers(payload, NOW)[0]).toMatchObject({
+      isBlueVerified: false,
+      protected: true,
+      statusesCount: 2,
+      friendsCount: 150,
+      followersCount: 50,
+    });
   });
 });
 
@@ -463,6 +570,7 @@ describe("extractFollowingUsers · deduplication", () => {
         name: "Synthetic Alpha",
         avatarUrl: "https://pbs.twimg.com/profile_images/1/synthetic_normal.jpg",
         followedBy: true,
+        ...UNKNOWN_PROFILE,
         syncedAt: NOW,
       },
     ]);
