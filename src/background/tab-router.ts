@@ -208,9 +208,16 @@ export async function sendUnfollowOne(
   tabId: number,
   target: FollowingUser,
   account: AccountIdentity,
+  interval: { intervalMinSec: number; intervalMaxSec: number },
   options: SendUnfollowOptions = {},
 ): Promise<boolean> {
-  const message: ExtensionMessage = { type: "UNFOLLOW_ONE", target, account };
+  const message: ExtensionMessage = {
+    type: "UNFOLLOW_ONE",
+    target,
+    account,
+    intervalMinSec: interval.intervalMinSec,
+    intervalMaxSec: interval.intervalMaxSec,
+  };
   const attempts = options.attempts ?? 4;
   const retryDelayMs = options.retryDelayMs ?? 500;
   const wait = options.wait ?? defaultWait;

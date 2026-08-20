@@ -358,7 +358,7 @@ describe("Side Panel", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/队列已启动/)).toBeInTheDocument();
-      expect(screen.getByText(/将在 2–10 秒内执行第一次取关/)).toBeInTheDocument();
+      expect(screen.getByText(/将在 3–12 秒内执行第一次取关/)).toBeInTheDocument();
     });
   });
 
@@ -515,15 +515,42 @@ describe("Side Panel", () => {
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "设置" }));
 
-    expect(screen.getByText(/间隔 2–10 秒；每小时 5，每天 20，每会话 10/)).toBeInTheDocument();
+    expect(screen.getByText(/每小时 5，每天 20，每会话 10/)).toBeInTheDocument();
+    expect(screen.getByText(/取关间隔在下方单独设置，与档位无关/)).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "最小间隔（秒）" })).toHaveValue(3);
+    expect(screen.getByRole("spinbutton", { name: "最大间隔（秒）" })).toHaveValue(12);
 
     fireEvent.click(screen.getByRole("radio", { name: "均衡" }));
-    expect(screen.getByText(/间隔 2–10 秒；每小时 8，每天 30，每会话 15/)).toBeInTheDocument();
+    expect(screen.getByText(/每小时 8，每天 30，每会话 15/)).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "最小间隔（秒）" })).toHaveValue(3);
 
     fireEvent.click(screen.getByRole("radio", { name: "自定义" }));
     expect(
-      screen.getByText(/间隔不低于 2 秒；每小时 ≤12，每天 ≤40，每会话 ≤20/),
+      screen.getByText(/每小时 ≤12，每天 ≤40，每会话 ≤20/),
     ).toBeInTheDocument();
+  });
+
+  it("saves interval on any preset through SETTINGS_UPDATE with a hard floor of 2", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "最小间隔（秒）" }), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "最大间隔（秒）" }), {
+      target: { value: "20" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
+
+    expect(messages).toContainEqual({
+      type: "SETTINGS_UPDATE",
+      settings: expect.objectContaining({
+        preset: "safe",
+        intervalMinSec: 2,
+        intervalMaxSec: 20,
+      }),
+    });
   });
 
   it("shows sync target count in settings with default and helper copy", async () => {

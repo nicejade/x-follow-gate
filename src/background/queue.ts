@@ -12,8 +12,8 @@
  *   before any command is sent, so a worker that dies mid-tick wakes up with a
  *   schedule that is at least as conservative as the one it planned.
  * - **Never early.** An execution requires `now >= nextAt` (when one is set),
- *   quota headroom, and an open active-hours window. The 2–10s gap between
- *   clicks is the profile dwell, not a background interval.
+ *   quota headroom, and an open active-hours window. The gap between clicks is
+ *   the profile dwell (from settings), not a background interval.
  * - **One owner.** The account that started the session must still be the signed-in
  *   account. `null` or a different account stops the queue; a new account is
  *   never adopted.
@@ -36,7 +36,7 @@ import {
   isSyncBlockingQueue,
   pickIntervalMs,
   purgeExpiredTimestamps,
-  UNFOLLOW_WATCHDOG_MS,
+  unfollowWatchdogMs,
 } from "@/shared/safety";
 import type {
   AuditEntry,
@@ -218,7 +218,7 @@ export function startQueue(
         })),
         cursor: 0,
         // The first tick sends UNFOLLOW_ONE immediately; the content script
-        // dwells 2–10s before clicking, which is what prevents a burst.
+        // dwells on the profile before clicking, which is what prevents a burst.
         nextAt: null,
         sessionStartedAt: now,
         actionTimestamps: purgeExpiredTimestamps(queue.actionTimestamps, now),
@@ -296,7 +296,7 @@ export function planNext(
     // the watchdog schedule expires it.
     return {
       action: "wait",
-      nextAt: queue.nextAt ?? now + UNFOLLOW_WATCHDOG_MS,
+      nextAt: queue.nextAt ?? now + unfollowWatchdogMs(limits),
       target: queue.items[inFlight],
     };
   }
@@ -324,9 +324,9 @@ export function planNext(
   }
 
   // `nextAt === null` means the previous action finished (or the session just
-  // started). The content script still waits a random 2–10s on the profile
+  // started). The content script still waits a random dwell on the profile
   // before clicking, so this is not a burst.
-  return { action: "execute", nextAt: now + UNFOLLOW_WATCHDOG_MS, target };
+  return { action: "execute", nextAt: now + unfollowWatchdogMs(limits), target };
 }
 
 function withQueue(state: ExtensionState, patch: Partial<UnfollowQueue>): ExtensionState {
@@ -765,7 +765,13 @@ async function executePlan(
   );
   await chrome.alarms.create(UNFOLLOW_ALARM_NAME, { when: nextAt });
 
-  if (await sendUnfollowOne(route.tabId, target, account)) {
+  const limits = clampSettings(state.settings);
+  if (
+    await sendUnfollowOne(route.tabId, target, account, {
+      intervalMinSec: limits.intervalMinSec,
+      intervalMaxSec: limits.intervalMaxSec,
+    })
+  ) {
     return plan;
   }
 
@@ -832,7 +838,7 @@ export async function runQueueTick(
  * Opens a session and dispatches the first unfollow. Routing the write tab
  * belongs to that tick alone: a second, overlapping navigation would unload the
  * document that received `UNFOLLOW_ONE` and leave the queue silent until the
- * watchdog expires. The content script dwells 2–10 seconds on the profile
+ * watchdog expires. The content script dwells on the profile per settings
  * before clicking, so pressing Start cannot produce a burst.
  */
 export async function startUnfollowQueue(

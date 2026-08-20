@@ -1,6 +1,6 @@
 import { selectCandidates } from "@/shared/rules";
 import type { ExtensionState, QuotaBlockReason, SafetyPreset } from "@/shared/types";
-import { PRESET_LIMITS } from "@/shared/safety";
+import { PROFILE_DWELL } from "@/shared/safety";
 
 export type PanelTab = "insight" | "cleanup" | "settings";
 
@@ -87,12 +87,7 @@ export function formatEta(count: number, intervalMinSec: number, intervalMaxSec:
 }
 
 export function intervalBand(state: ExtensionState): string {
-  const { intervalMinSec, intervalMaxSec, preset } = state.settings;
-  if (preset !== "custom") {
-    const limits = PRESET_LIMITS[preset];
-    return `${limits.intervalMinSec}–${limits.intervalMaxSec} 秒`;
-  }
-
+  const { intervalMinSec, intervalMaxSec } = state.settings;
   return `${intervalMinSec}–${intervalMaxSec} 秒`;
 }
 
@@ -125,6 +120,8 @@ export interface QueueProgressInput {
   hourlyCap: number;
   sessionCount: number;
   sessionCap: number;
+  intervalMinSec?: number;
+  intervalMaxSec?: number;
 }
 
 export interface QueueProgressCopy {
@@ -137,8 +134,10 @@ export interface QueueProgressCopy {
 const SETTINGS_HINT = "每小时、每天、每会话上限可在「设置」中切换安全档位。";
 
 export function describeQueueProgress(input: QueueProgressInput): QueueProgressCopy {
+  const intervalMin = input.intervalMinSec ?? PROFILE_DWELL.minSec;
+  const intervalMax = input.intervalMaxSec ?? PROFILE_DWELL.maxSec;
   const stats = `剩余 ${input.remaining} 个 · 本小时 ${input.hourCount}/${input.hourlyCap} · 本次会话 ${input.sessionCount}/${input.sessionCap}`;
-  const hint = `打开目标主页后停留 2–10 秒再取关。${SETTINGS_HINT}`;
+  const hint = `打开目标主页后停留 ${intervalMin}–${intervalMax} 秒再取关。${SETTINGS_HINT}`;
 
   if (input.paused === true) {
     return { title: "队列已暂停", wait: "已暂停，不会自动继续。", stats, hint };

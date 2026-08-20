@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { SendCommand } from "@/sidepanel/hooks/useExtensionState";
 import {
@@ -8,7 +8,7 @@ import {
   normalizeHandle,
 } from "@/shared/rules";
 import { HARD_LIMITS, PRESET_LIMITS, clampSettings } from "@/shared/safety";
-import type { ExtensionState, SafetyPreset, ScanStrategies } from "@/shared/types";
+import type { ExtensionState, SafetyPreset, ScanStrategies, Settings } from "@/shared/types";
 
 const SCAN_STRATEGY_OPTIONS: Array<{
   key: keyof ScanStrategies;
@@ -32,11 +32,62 @@ const SCAN_STRATEGY_OPTIONS: Array<{
 
 function presetPolicyCopy(preset: SafetyPreset): string {
   if (preset === "custom") {
-    return `间隔不低于 ${HARD_LIMITS.minIntervalSec} 秒；每小时 ≤${HARD_LIMITS.maxHourlyCap}，每天 ≤${HARD_LIMITS.maxDailyCap}，每会话 ≤${HARD_LIMITS.maxSessionCap}。起止相同时视为全天开放。`;
+    return `每小时 ≤${HARD_LIMITS.maxHourlyCap}，每天 ≤${HARD_LIMITS.maxDailyCap}，每会话 ≤${HARD_LIMITS.maxSessionCap}。取关间隔在下方单独设置（不低于 ${HARD_LIMITS.minIntervalSec} 秒）。`;
   }
 
   const limits = PRESET_LIMITS[preset];
-  return `间隔 ${limits.intervalMinSec}–${limits.intervalMaxSec} 秒；每小时 ${limits.hourlyCap}，每天 ${limits.dailyCap}，每会话 ${limits.sessionCap}。`;
+  return `每小时 ${limits.hourlyCap}，每天 ${limits.dailyCap}，每会话 ${limits.sessionCap}。取关间隔在下方单独设置，与档位无关。`;
+}
+
+function IntervalFields({
+  draft,
+  setDraft,
+}: {
+  draft: Settings;
+  setDraft: Dispatch<SetStateAction<Settings>>;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <label className="block text-sm">
+        <span id="interval-min-label" className="mb-1.5 block font-medium">
+          最小间隔（秒）
+        </span>
+        <input
+          type="number"
+          aria-labelledby="interval-min-label"
+          min={HARD_LIMITS.minIntervalSec}
+          value={Number.isFinite(draft.intervalMinSec) ? draft.intervalMinSec : ""}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              intervalMinSec:
+                event.target.value === "" ? Number.NaN : Number(event.target.value),
+            }))
+          }
+          className="min-h-11 w-full rounded-[var(--radius-panel)] border border-border bg-surface px-3 text-sm"
+        />
+      </label>
+      <label className="block text-sm">
+        <span id="interval-max-label" className="mb-1.5 block font-medium">
+          最大间隔（秒）
+        </span>
+        <input
+          type="number"
+          aria-labelledby="interval-max-label"
+          min={HARD_LIMITS.minIntervalSec}
+          value={Number.isFinite(draft.intervalMaxSec) ? draft.intervalMaxSec : ""}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              intervalMaxSec:
+                event.target.value === "" ? Number.NaN : Number(event.target.value),
+            }))
+          }
+          className="min-h-11 w-full rounded-[var(--radius-panel)] border border-border bg-surface px-3 text-sm"
+        />
+      </label>
+    </div>
+  );
 }
 
 interface SettingsViewProps {
@@ -72,6 +123,16 @@ export function SettingsView({ state, send }: SettingsViewProps) {
           </div>
           <p className="mt-2 text-xs leading-relaxed text-muted">
             {presetPolicyCopy(draft.preset)}
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <legend className="mb-2.5 text-sm font-medium">取关间隔</legend>
+          <IntervalFields draft={draft} setDraft={setDraft} />
+          <p className="text-xs text-muted">
+            默认 {PRESET_LIMITS.safe.intervalMinSec}–{PRESET_LIMITS.safe.intervalMaxSec}{" "}
+            秒；低于 {HARD_LIMITS.minIntervalSec} 秒会按 {HARD_LIMITS.minIntervalSec}{" "}
+            秒保存。取关前会在此区间内随机停留，与安全档位无关。
           </p>
         </div>
 

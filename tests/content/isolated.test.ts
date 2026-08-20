@@ -441,10 +441,12 @@ describe("runUnfollowCommand", () => {
       type: "UNFOLLOW_ONE" as const,
       target: followingUser(),
       account: { userId: "9", handle: "self" },
+      intervalMinSec: 3,
+      intervalMaxSec: 12,
     };
 
     const promise = runUnfollowCommand(message, report, () => 0);
-    await vi.advanceTimersByTimeAsync(1_999);
+    await vi.advanceTimersByTimeAsync(2_999);
     expect(unfollowOne).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
@@ -523,6 +525,8 @@ describe("createRuntimeMessageHandler", () => {
       type: "UNFOLLOW_ONE" as const,
       target: followingUser(),
       account: ACCOUNT,
+      intervalMinSec: 3,
+      intervalMaxSec: 12,
     };
 
     expect(listener(message)).toEqual({ accepted: true });

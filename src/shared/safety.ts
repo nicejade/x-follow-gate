@@ -38,15 +38,15 @@ export const DEFAULT_SYNC_TARGET_COUNT = 1_000;
 
 export const PRESET_LIMITS = {
   safe: {
-    intervalMinSec: 2,
-    intervalMaxSec: 10,
+    intervalMinSec: 3,
+    intervalMaxSec: 12,
     hourlyCap: 5,
     dailyCap: 20,
     sessionCap: 10,
   },
   balanced: {
-    intervalMinSec: 2,
-    intervalMaxSec: 10,
+    intervalMinSec: 3,
+    intervalMaxSec: 12,
     hourlyCap: 8,
     dailyCap: 30,
     sessionCap: 15,
@@ -132,8 +132,9 @@ export function clampScanStrategies(value: Partial<ScanStrategies> | undefined):
 }
 
 /**
- * Applies presets and hard limits. Safe and Balanced always return their exact
- * documented values; only Custom keeps user numbers, clamped to the floors.
+ * Applies presets and hard limits. Safe and Balanced lock their hourly / daily /
+ * session caps; the unfollow interval is always taken from the user values and
+ * only clamped to the hard floor (independent of preset).
  */
 export function clampSettings(settings: Settings): Settings {
   const preset = normalizePreset(settings.preset);
@@ -145,22 +146,28 @@ export function clampSettings(settings: Settings): Settings {
         HARD_LIMITS.maxSyncTargetCount,
       )
     : DEFAULT_SYNC_TARGET_COUNT;
-
-  if (preset !== "custom") {
-    return {
-      preset,
-      ...PRESET_LIMITS[preset],
-      syncTargetCount,
-      activeHours,
-      scanStrategies: clampScanStrategies(settings.scanStrategies),
-    };
-  }
+  const scanStrategies = clampScanStrategies(settings.scanStrategies);
 
   const intervalMinSec = Math.max(
     HARD_LIMITS.minIntervalSec,
     toInt(settings.intervalMinSec, HARD_LIMITS.minIntervalSec),
   );
-  const intervalMaxSec = Math.max(intervalMinSec, toInt(settings.intervalMaxSec, intervalMinSec));
+  const intervalMaxSec = Math.max(
+    intervalMinSec,
+    toInt(settings.intervalMaxSec, intervalMinSec),
+  );
+
+  if (preset !== "custom") {
+    return {
+      preset,
+      ...PRESET_LIMITS[preset],
+      intervalMinSec,
+      intervalMaxSec,
+      syncTargetCount,
+      activeHours,
+      scanStrategies,
+    };
+  }
 
   return {
     preset,
@@ -172,7 +179,7 @@ export function clampSettings(settings: Settings): Settings {
     sessionCap: clampInt(settings.sessionCap, 1, HARD_LIMITS.maxSessionCap),
     syncTargetCount,
     activeHours,
-    scanStrategies: clampScanStrategies(settings.scanStrategies),
+    scanStrategies,
   };
 }
 
@@ -261,24 +268,36 @@ export function pickIntervalMs(settings: Settings, random: () => number = Math.r
   return Math.round((min + (max - min) * sample) * 1000);
 }
 
-/** Random dwell on a profile before clicking unfollow. */
+/** Default profile dwell band; matches Safe / Balanced interval presets. */
 export const PROFILE_DWELL = {
-  minSec: 2,
-  maxSec: 10,
+  minSec: PRESET_LIMITS.safe.intervalMinSec,
+  maxSec: PRESET_LIMITS.safe.intervalMaxSec,
 } as const;
 
 /**
- * Deadline for an in-flight unfollow. Long enough for the 2–10s dwell plus the
- * two-click confirmation, and at Chrome's alarm floor so a sleeping worker still
- * wakes to write the attempt off.
+ * Base deadline for an in-flight unfollow: long enough for the default dwell
+ * plus the two-click confirmation, and at Chrome's alarm floor so a sleeping
+ * worker still wakes to write the attempt off. Custom dwells use
+ * `unfollowWatchdogMs`, which never returns less than this.
  */
 export const UNFOLLOW_WATCHDOG_MS = 30_000;
 
-export function pickProfileDwellMs(random: () => number = Math.random): number {
-  const { minSec, maxSec } = PROFILE_DWELL;
+/** In-flight deadline scaled to the configured dwell upper bound. */
+export function unfollowWatchdogMs(settings: Settings): number {
+  const { intervalMaxSec } = clampSettings(settings);
+  // Room for the confirmation dialog after the longest allowed dwell.
+  return Math.max(UNFOLLOW_WATCHDOG_MS, intervalMaxSec * 1000 + 20_000);
+}
+
+export function pickProfileDwellMs(
+  interval: { minSec: number; maxSec: number } = PROFILE_DWELL,
+  random: () => number = Math.random,
+): number {
+  const min = Math.max(HARD_LIMITS.minIntervalSec, toInt(interval.minSec, PROFILE_DWELL.minSec));
+  const max = Math.max(min, toInt(interval.maxSec, min));
   const sample = Math.min(1, Math.max(0, random()));
 
-  return Math.round((minSec + (maxSec - minSec) * sample) * 1000);
+  return Math.round((min + (max - min) * sample) * 1000);
 }
 
 /**

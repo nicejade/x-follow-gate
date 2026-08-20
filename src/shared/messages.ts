@@ -57,7 +57,13 @@ export type ExtensionMessage =
    * expected owner travels with the target so the driver can refuse to act on a
    * page that belongs to a different account.
    */
-  | { type: "UNFOLLOW_ONE"; target: FollowingUser; account: AccountIdentity }
+  | {
+      type: "UNFOLLOW_ONE";
+      target: FollowingUser;
+      account: AccountIdentity;
+      intervalMinSec: number;
+      intervalMaxSec: number;
+    }
   | { type: "UNFOLLOW_RESULT"; result: UnfollowResult }
   | { type: "SETTINGS_UPDATE"; settings: Settings }
   | { type: "WHITELIST_UPDATE"; entries: WhitelistEntry[] };

@@ -99,6 +99,8 @@ const messages: ExtensionMessage[] = [
       syncedAt: 1_700_000_000_000,
     },
     account: { userId: "9", handle: "self" },
+    intervalMinSec: 3,
+    intervalMaxSec: 12,
   },
   {
     type: "UNFOLLOW_RESULT",

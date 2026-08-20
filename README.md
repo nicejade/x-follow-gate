@@ -14,7 +14,7 @@ Follow Gate reuses your existing x.com browser session—no second login and no 
 
 - **Local and minimal permissions** — No server, analytics, or remote config. Does not request `cookies`, `<all_urls>`, or `webRequest`.
 - **Multi-strategy scan (OR)** — Independently toggle: not following back; non-blue verified; protected/private; very few posts (`statusesCount < 10`); following far exceeds followers (`friendsCount >= 100` and `friendsCount >= followersCount × 1.2`). Whitelist always excludes. Missing fields never match.
-- **Safety rate limits** — Default **Safe**: 2–10s between actions, ≤5/hour, ≤20/day, ≤10/session. Balanced and Custom exist; hard floors cannot be bypassed in the UI.
+- **Safety rate limits** — Default interval **3–12s** (editable in Settings, hard floor 2s, independent of preset). Default **Safe** caps: ≤5/hour, ≤20/day, ≤10/session. Balanced and Custom change caps only; hard floors cannot be bypassed in the UI.
 - **Anti-abuse posture** — Randomized scroll pacing; one visible-profile unfollow at a time; Pause / Stop anytime; cooldown on auth or rate-limit-like failures.
 - **Reviewable cleanup** — Preview candidates with match reasons; confirm before enqueue; queue stays pausable.
 

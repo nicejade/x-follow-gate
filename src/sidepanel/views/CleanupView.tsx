@@ -121,6 +121,8 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
     hourlyCap: state.settings.hourlyCap,
     sessionCount,
     sessionCap: state.settings.sessionCap,
+    intervalMinSec: state.settings.intervalMinSec,
+    intervalMaxSec: state.settings.intervalMaxSec,
   });
 
   async function dismissCooldown() {

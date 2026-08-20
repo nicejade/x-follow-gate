@@ -22,9 +22,15 @@ import {
   UNFOLLOW_ALARM_NAME,
 } from "@/background/queue";
 import { isQueueBlockingSync } from "@/background/sync-coordinator";
-import { createDefaultState, STATE_STORAGE_KEY } from "@/shared/defaults";
+import { createDefaultSettings, createDefaultState, STATE_STORAGE_KEY } from "@/shared/defaults";
 import type { ExtensionMessage } from "@/shared/messages";
-import { COOLDOWN_MS, DAY_MS, HOUR_MS, MINUTE_MS, UNFOLLOW_WATCHDOG_MS } from "@/shared/safety";
+import {
+  COOLDOWN_MS,
+  DAY_MS,
+  HOUR_MS,
+  MINUTE_MS,
+  unfollowWatchdogMs,
+} from "@/shared/safety";
 import type {
   ExtensionState,
   FollowingUser,
@@ -43,7 +49,11 @@ function localTime(hour: number, minute = 0): number {
 
 const NOW = localTime(12);
 const OWNER = { userId: "9", handle: "self" };
-const WATCHDOG_MS = UNFOLLOW_WATCHDOG_MS;
+const WATCHDOG_MS = unfollowWatchdogMs(createDefaultSettings());
+const DEFAULT_INTERVAL = {
+  intervalMinSec: createDefaultSettings().intervalMinSec,
+  intervalMaxSec: createDefaultSettings().intervalMaxSec,
+};
 
 function user(overrides: Partial<FollowingUser> = {}): FollowingUser {
   return {
@@ -1150,7 +1160,7 @@ describe("startUnfollowQueue", () => {
       items: [{ userId: "1", status: "in-flight" }, { userId: "2", status: "pending" }],
     });
     expect(chromeMock.messages).toEqual([
-      { tabId: 7, message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER } },
+      { tabId: 7, message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER, ...DEFAULT_INTERVAL } },
     ]);
     expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + WATCHDOG_MS);
     expect(chromeMock.updates).toEqual([{ tabId: 7, url: "https://x.com/alice", active: true }]);
@@ -1205,7 +1215,7 @@ describe("runQueueTick", () => {
     expect(chromeMock.messages).toEqual([
       {
         tabId: 7,
-        message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER },
+        message: { type: "UNFOLLOW_ONE", target: user(), account: OWNER, ...DEFAULT_INTERVAL },
       },
     ]);
     expect(chromeMock.tabsApi.create).not.toHaveBeenCalled();
@@ -1389,7 +1399,7 @@ describe("runQueueTick", () => {
     expect(chromeMock.messages).toEqual([
       {
         tabId: 7,
-        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
+        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER, ...DEFAULT_INTERVAL },
       },
     ]);
   });
@@ -1413,7 +1423,7 @@ describe("applyUnfollowResult", () => {
     expect(chromeMock.messages).toEqual([
       {
         tabId: 7,
-        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
+        message: { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER, ...DEFAULT_INTERVAL },
       },
     ]);
     expect(chromeMock.alarms.get(UNFOLLOW_ALARM_NAME)).toBe(NOW + WATCHDOG_MS);
@@ -1462,7 +1472,7 @@ describe("a full session", () => {
 
     await startUnfollowQueue(["1", "2"], NOW, () => 0, routeOptions);
     expect(chromeMock.messages.map((entry) => entry.message)).toEqual([
-      { type: "UNFOLLOW_ONE", target: user(), account: OWNER },
+      { type: "UNFOLLOW_ONE", target: user(), account: OWNER, ...DEFAULT_INTERVAL },
     ]);
     expect(chromeMock.persistedQueue().items[0]).toMatchObject({ status: "in-flight" });
 
@@ -1473,8 +1483,8 @@ describe("a full session", () => {
     const firstDoneAt = NOW + 2_000;
     await applyUnfollowResult(result(), firstDoneAt, () => 0, routeOptions);
     expect(chromeMock.messages.map((entry) => entry.message)).toEqual([
-      { type: "UNFOLLOW_ONE", target: user(), account: OWNER },
-      { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER },
+      { type: "UNFOLLOW_ONE", target: user(), account: OWNER, ...DEFAULT_INTERVAL },
+      { type: "UNFOLLOW_ONE", target: user({ userId: "2", handle: "bob" }), account: OWNER, ...DEFAULT_INTERVAL },
     ]);
     expect(chromeMock.persistedQueue().nextAt).toBe(firstDoneAt + WATCHDOG_MS);
 

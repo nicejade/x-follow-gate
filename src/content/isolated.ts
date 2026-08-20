@@ -236,7 +236,12 @@ export async function runUnfollowCommand(
   report: (result: UnfollowResult) => void,
   random: () => number = Math.random,
 ): Promise<void> {
-  await sleep(pickProfileDwellMs(random));
+  await sleep(
+    pickProfileDwellMs(
+      { minSec: message.intervalMinSec, maxSec: message.intervalMaxSec },
+      random,
+    ),
+  );
   const result = await unfollowOne(message.target, createBrowserUnfollowEnvironment(), message.account);
   report(result);
 }

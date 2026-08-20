@@ -92,12 +92,12 @@ describe("clampSettings", () => {
     });
   });
 
-  it("forces the exact Safe preset values", () => {
+  it("forces the Safe preset caps while keeping a user interval", () => {
     const result = clampSettings(
       settings({
         preset: "safe",
         intervalMinSec: 5,
-        intervalMaxSec: 5,
+        intervalMaxSec: 9,
         hourlyCap: 99,
         dailyCap: 99,
         sessionCap: 99,
@@ -106,20 +106,20 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "safe",
-      intervalMinSec: 2,
-      intervalMaxSec: 10,
+      intervalMinSec: 5,
+      intervalMaxSec: 9,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,
     });
   });
 
-  it("forces the exact Balanced preset values", () => {
+  it("forces the Balanced preset caps while keeping a user interval", () => {
     const result = clampSettings(
       settings({
         preset: "balanced",
-        intervalMinSec: 1,
-        intervalMaxSec: 2,
+        intervalMinSec: 4,
+        intervalMaxSec: 8,
         hourlyCap: 99,
         dailyCap: 99,
         sessionCap: 99,
@@ -128,11 +128,30 @@ describe("clampSettings", () => {
 
     expect(result).toMatchObject({
       preset: "balanced",
-      intervalMinSec: 2,
-      intervalMaxSec: 10,
+      intervalMinSec: 4,
+      intervalMaxSec: 8,
       hourlyCap: 8,
       dailyCap: 30,
       sessionCap: 15,
+    });
+  });
+
+  it("clamps unsafe intervals even on a Safe preset", () => {
+    const result = clampSettings(
+      settings({
+        preset: "safe",
+        intervalMinSec: 1,
+        intervalMaxSec: 2,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      preset: "safe",
+      intervalMinSec: 2,
+      intervalMaxSec: 2,
+      hourlyCap: 5,
+      dailyCap: 20,
+      sessionCap: 10,
     });
   });
 
@@ -189,7 +208,8 @@ describe("clampSettings", () => {
     const result = clampSettings(settings({ preset: "aggressive" as Settings["preset"] }));
 
     expect(result.preset).toBe("safe");
-    expect(result.intervalMinSec).toBe(2);
+    expect(result.intervalMinSec).toBe(90);
+    expect(result.hourlyCap).toBe(5);
   });
 
   it("preserves valid active hours and repairs invalid ones", () => {
@@ -339,11 +359,13 @@ describe("timestamp windows", () => {
 
 describe("pickIntervalMs", () => {
   it("samples uniformly inside the configured band", () => {
-    const safe = clampSettings(settings({ preset: "safe" }));
+    const safe = clampSettings(
+      settings({ preset: "safe", intervalMinSec: 3, intervalMaxSec: 12 }),
+    );
 
-    expect(pickIntervalMs(safe, () => 0)).toBe(2_000);
-    expect(pickIntervalMs(safe, () => 1)).toBe(10_000);
-    expect(pickIntervalMs(safe, () => 0.5)).toBe(6_000);
+    expect(pickIntervalMs(safe, () => 0)).toBe(3_000);
+    expect(pickIntervalMs(safe, () => 1)).toBe(12_000);
+    expect(pickIntervalMs(safe, () => 0.5)).toBe(7_500);
   });
 
   it("never returns a delay below the hard interval floor", () => {
@@ -355,9 +377,18 @@ describe("pickIntervalMs", () => {
 
 describe("pickProfileDwellMs", () => {
   it("samples uniformly inside the profile dwell band", () => {
-    expect(pickProfileDwellMs(() => 0)).toBe(2_000);
-    expect(pickProfileDwellMs(() => 1)).toBe(10_000);
-    expect(pickProfileDwellMs(() => 0.5)).toBe(6_000);
+    expect(pickProfileDwellMs(undefined, () => 0)).toBe(3_000);
+    expect(pickProfileDwellMs(undefined, () => 1)).toBe(12_000);
+    expect(pickProfileDwellMs(undefined, () => 0.5)).toBe(7_500);
+  });
+
+  it("honors a custom interval band from settings", () => {
+    expect(pickProfileDwellMs({ minSec: 5, maxSec: 9 }, () => 0)).toBe(5_000);
+    expect(pickProfileDwellMs({ minSec: 5, maxSec: 9 }, () => 1)).toBe(9_000);
+  });
+
+  it("never dwells below the hard interval floor", () => {
+    expect(pickProfileDwellMs({ minSec: 1, maxSec: 2 }, () => 0)).toBe(2_000);
   });
 });
 
@@ -367,8 +398,8 @@ describe("default persisted state", () => {
 
     expect(state.settings).toEqual({
       preset: "safe",
-      intervalMinSec: 2,
-      intervalMaxSec: 10,
+      intervalMinSec: 3,
+      intervalMaxSec: 12,
       hourlyCap: 5,
       dailyCap: 20,
       sessionCap: 10,

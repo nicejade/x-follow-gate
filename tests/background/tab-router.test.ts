@@ -271,14 +271,24 @@ describe("routeToProfile", () => {
 });
 
 describe("sendUnfollowOne", () => {
+  const INTERVAL = { intervalMinSec: 3, intervalMaxSec: 12 };
+
   it("sends exactly one command carrying the target and the owner account", async () => {
     install(createTabsMock([{ id: 5, url: "https://x.com/alice" }]));
 
-    const delivered = await sendUnfollowOne(5, target(), OWNER);
+    const delivered = await sendUnfollowOne(5, target(), OWNER, INTERVAL);
 
     expect(delivered).toBe(true);
     expect(tabs.messages).toEqual([
-      { tabId: 5, message: { type: "UNFOLLOW_ONE", target: target(), account: OWNER } },
+      {
+        tabId: 5,
+        message: {
+          type: "UNFOLLOW_ONE",
+          target: target(),
+          account: OWNER,
+          ...INTERVAL,
+        },
+      },
     ]);
     expect(tabs.api.sendMessage).toHaveBeenCalledTimes(1);
   });
@@ -287,13 +297,13 @@ describe("sendUnfollowOne", () => {
     install(createTabsMock([{ id: 5, url: "https://x.com/alice" }]));
     tabs.api.sendMessage.mockResolvedValueOnce({ accepted: false });
 
-    await expect(sendUnfollowOne(5, target(), OWNER, { attempts: 1 })).resolves.toBe(false);
+    await expect(sendUnfollowOne(5, target(), OWNER, INTERVAL, { attempts: 1 })).resolves.toBe(false);
   });
 
   it("reports an undelivered command instead of throwing", async () => {
     install(createTabsMock([{ id: 5, url: "https://x.com/alice" }]));
     tabs.breakDelivery();
 
-    await expect(sendUnfollowOne(5, target(), OWNER)).resolves.toBe(false);
+    await expect(sendUnfollowOne(5, target(), OWNER, INTERVAL)).resolves.toBe(false);
   });
 });
