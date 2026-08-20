@@ -13,7 +13,12 @@ const changeListeners: Array<
   (changes: Record<string, { newValue: unknown }>, area: string) => void
 > = [];
 
-function user(userId: string, handle: string, followedBy: boolean | null): FollowingUser {
+function user(
+  userId: string,
+  handle: string,
+  followedBy: boolean | null,
+  overrides: Partial<FollowingUser> = {},
+): FollowingUser {
   return {
     userId,
     handle,
@@ -26,7 +31,55 @@ function user(userId: string, handle: string, followedBy: boolean | null): Follo
     friendsCount: null,
     followersCount: null,
     syncedAt: 1,
+    ...overrides,
   };
+}
+
+const ALL_STRATEGIES_ON = {
+  notFollowingBack: true,
+  nonBlueVerified: true,
+  protected: true,
+  lowTweetCount: true,
+  followRatio: true,
+};
+
+function mixedStrategyState(): ExtensionState {
+  return signedInState({
+    settings: {
+      ...createDefaultState().settings,
+      scanStrategies: ALL_STRATEGIES_ON,
+    },
+    following: {
+      pr: user("pr", "locked", true, {
+        isBlueVerified: true,
+        protected: true,
+        statusesCount: 100,
+        friendsCount: 10,
+        followersCount: 10,
+      }),
+      nb: user("nb", "plain", true, {
+        isBlueVerified: false,
+        protected: false,
+        statusesCount: 100,
+        friendsCount: 10,
+        followersCount: 10,
+      }),
+      nf: user("nf", "ghosted", false, {
+        isBlueVerified: true,
+        protected: false,
+        statusesCount: 100,
+        friendsCount: 10,
+        followersCount: 10,
+      }),
+    },
+    candidates: ["pr", "nb", "nf"],
+  });
+}
+
+function listedHandles(): string[] {
+  return screen
+    .getAllByRole("checkbox", { name: /选择 @/ })
+    .map((checkbox) => checkbox.getAttribute("aria-label") ?? "");
 }
 
 function signedInState(overrides: Partial<ExtensionState> = {}): ExtensionState {
@@ -549,6 +602,47 @@ describe("Side Panel", () => {
       settings: expect.objectContaining({
         scanStrategies: expect.objectContaining({ nonBlueVerified: true }),
       }),
+    });
+  });
+
+  it("sorts cleanup candidates by the default strategy cascade", async () => {
+    installChrome(mixedStrategyState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    expect(listedHandles()).toEqual(["选择 @ghosted", "选择 @plain", "选择 @locked"]);
+    expect(screen.getByRole("combobox", { name: "排序" })).toHaveValue("priority");
+    expect(screen.getByRole("option", { name: "策略优先级" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "未回关" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "非蓝标" })).toBeInTheDocument();
+  });
+
+  it("omits disabled strategies from the sort picker", async () => {
+    installChrome(signedInState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    expect(screen.getByRole("option", { name: "策略优先级" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "未回关" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "非蓝标" })).not.toBeInTheDocument();
+  });
+
+  it("reorders the list and queue start ids when a strategy is chosen", async () => {
+    installChrome(mixedStrategyState());
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "清理" }));
+
+    fireEvent.change(screen.getByRole("combobox", { name: "排序" }), {
+      target: { value: "non-blue-verified" },
+    });
+
+    expect(listedHandles()).toEqual(["选择 @plain", "选择 @ghosted", "选择 @locked"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "开始清理（预览）" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认并开始" }));
+
+    await waitFor(() => {
+      expect(messages).toContainEqual({ type: "QUEUE_START", userIds: ["nb", "nf", "pr"] });
     });
   });
 });

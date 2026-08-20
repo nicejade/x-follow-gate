@@ -6,6 +6,7 @@ import {
   matchReasons,
   normalizeHandle,
   selectCandidates,
+  sortCandidates,
 } from "@/shared/rules";
 import type { FollowingUser, RelationshipState, ScanStrategies } from "@/shared/types";
 
@@ -228,5 +229,92 @@ describe("selectCandidates with strategies", () => {
     const users = [user("1", "a", false, { isBlueVerified: false })];
     const strategies = { ...ALL_OFF, notFollowingBack: true, nonBlueVerified: true };
     expect(selectCandidates(users, [{ handle: "a" }], strategies)).toEqual([]);
+  });
+});
+
+describe("sortCandidates", () => {
+  const ALL_ON: ScanStrategies = {
+    notFollowingBack: true,
+    nonBlueVerified: true,
+    protected: true,
+    lowTweetCount: true,
+    followRatio: true,
+  };
+
+  const nf = user("nf", "nf", false, {
+    isBlueVerified: true,
+    protected: false,
+    statusesCount: 100,
+    friendsCount: 10,
+    followersCount: 10,
+  });
+  const nb = user("nb", "nb", true, {
+    isBlueVerified: false,
+    protected: false,
+    statusesCount: 100,
+    friendsCount: 10,
+    followersCount: 10,
+  });
+  const pr = user("pr", "pr", true, {
+    isBlueVerified: true,
+    protected: true,
+    statusesCount: 100,
+    friendsCount: 10,
+    followersCount: 10,
+  });
+  const lt = user("lt", "lt", true, {
+    isBlueVerified: true,
+    protected: false,
+    statusesCount: 1,
+    friendsCount: 10,
+    followersCount: 10,
+  });
+  const fr = user("fr", "fr", true, {
+    isBlueVerified: true,
+    protected: false,
+    statusesCount: 100,
+    friendsCount: 200,
+    followersCount: 100,
+  });
+  const nfNb = user("nfnb", "nfnb", false, {
+    isBlueVerified: false,
+    protected: false,
+    statusesCount: 100,
+    friendsCount: 10,
+    followersCount: 10,
+  });
+
+  it("sorts by the default strategy cascade", () => {
+    expect(sortCandidates([fr, lt, pr, nb, nf], ALL_ON).map((item) => item.userId)).toEqual([
+      "nf",
+      "nb",
+      "pr",
+      "lt",
+      "fr",
+    ]);
+  });
+
+  it("ranks an earlier cascade match ahead of later ones when a user hits several", () => {
+    expect(sortCandidates([nf, nfNb], ALL_ON).map((item) => item.userId)).toEqual(["nfnb", "nf"]);
+  });
+
+  it("promotes the selected strategy then continues the cascade", () => {
+    expect(
+      sortCandidates([nf, nb, nfNb], ALL_ON, "non-blue-verified").map((item) => item.userId),
+    ).toEqual(["nfnb", "nb", "nf"]);
+  });
+
+  it("keeps input order when sort keys tie", () => {
+    const first = user("a", "a", false);
+    const second = user("b", "b", false);
+    expect(sortCandidates([first, second], P0_ONLY).map((item) => item.userId)).toEqual(["a", "b"]);
+  });
+
+  it("ignores disabled strategies as sort keys", () => {
+    const blueUnknown = user("1", "one", false, { isBlueVerified: false });
+    const blueTrue = user("2", "two", false, { isBlueVerified: true });
+    expect(
+      sortCandidates([blueUnknown, blueTrue], P0_ONLY, "non-blue-verified").map((item) => item.userId),
+    ).toEqual(["1", "2"]);
   });
 });

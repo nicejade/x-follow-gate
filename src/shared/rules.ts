@@ -25,6 +25,43 @@ export const SCAN_STRATEGY_LABELS: Record<ScanStrategyId, string> = {
   "follow-ratio": "关注/粉丝比",
 };
 
+const SCAN_STRATEGY_ORDER: readonly ScanStrategyId[] = [
+  "not-following-back",
+  "non-blue-verified",
+  "protected",
+  "low-tweet-count",
+  "follow-ratio",
+];
+
+export const CANDIDATE_SORT_PRIORITY_LABEL = "策略优先级";
+
+export type CandidateSortBy = "priority" | ScanStrategyId;
+
+export function enabledStrategyIds(strategies: ScanStrategies): ScanStrategyId[] {
+  return SCAN_STRATEGY_ORDER.filter((id) => {
+    switch (id) {
+      case "not-following-back":
+        return strategies.notFollowingBack;
+      case "non-blue-verified":
+        return strategies.nonBlueVerified;
+      case "protected":
+        return strategies.protected;
+      case "low-tweet-count":
+        return strategies.lowTweetCount;
+      case "follow-ratio":
+        return strategies.followRatio;
+    }
+  });
+}
+
+function sortKeyOrder(sortBy: CandidateSortBy): ScanStrategyId[] {
+  if (sortBy === "priority") {
+    return [...SCAN_STRATEGY_ORDER];
+  }
+
+  return [sortBy, ...SCAN_STRATEGY_ORDER.filter((id) => id !== sortBy)];
+}
+
 /** Normalizes a handle to lowercase without the leading `@`. */
 export function normalizeHandle(handle: string): string {
   if (typeof handle !== "string") {
@@ -130,4 +167,32 @@ export function selectCandidates(
   return users.filter(
     (user) => !matchesIndex(user, index) && matchReasons(user, strategies).length > 0,
   );
+}
+
+/**
+ * Stable-sorts candidates by scan-strategy match. Default `priority` uses the
+ * fixed cascade; a specific id is compared first, then the remaining cascade.
+ */
+export function sortCandidates(
+  users: FollowingUser[],
+  strategies: ScanStrategies = DEFAULT_SCAN_STRATEGIES,
+  sortBy: CandidateSortBy = "priority",
+): FollowingUser[] {
+  const keys = sortKeyOrder(sortBy);
+
+  return [...users].sort((left, right) => {
+    const leftReasons = new Set(matchReasons(left, strategies));
+    const rightReasons = new Set(matchReasons(right, strategies));
+
+    for (const key of keys) {
+      const leftHit = leftReasons.has(key);
+      const rightHit = rightReasons.has(key);
+      if (leftHit === rightHit) {
+        continue;
+      }
+      return leftHit ? -1 : 1;
+    }
+
+    return 0;
+  });
 }

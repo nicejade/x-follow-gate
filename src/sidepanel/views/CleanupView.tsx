@@ -11,7 +11,15 @@ import {
   PRESET_LABELS,
 } from "@/sidepanel/lib/metrics";
 import { describeOutcome, describeQueueStart } from "@/sidepanel/lib/outcome";
-import { matchReasons, SCAN_STRATEGY_LABELS, selectCandidates } from "@/shared/rules";
+import {
+  CANDIDATE_SORT_PRIORITY_LABEL,
+  enabledStrategyIds,
+  matchReasons,
+  SCAN_STRATEGY_LABELS,
+  selectCandidates,
+  sortCandidates,
+  type CandidateSortBy,
+} from "@/shared/rules";
 import { canRunNext, COOLDOWN_MS, countWithinWindow, HOUR_MS, isSyncBlockingQueue } from "@/shared/safety";
 import type { ExtensionState, FollowingUser, QueuePauseReason, SyncMeta } from "@/shared/types";
 
@@ -23,6 +31,7 @@ interface CleanupViewProps {
 
 export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps) {
   const [now, setNow] = useState(() => nowOverride ?? Date.now());
+  const [sortBy, setSortBy] = useState<CandidateSortBy>("priority");
   const candidates = useMemo(
     () =>
       selectCandidates(
@@ -31,6 +40,14 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
         state.settings.scanStrategies,
       ),
     [state.following, state.whitelist, state.settings.scanStrategies],
+  );
+  const enabledIds = useMemo(
+    () => enabledStrategyIds(state.settings.scanStrategies),
+    [state.settings.scanStrategies],
+  );
+  const sortedCandidates = useMemo(
+    () => sortCandidates(candidates, state.settings.scanStrategies, sortBy),
+    [candidates, sortBy, state.settings.scanStrategies],
   );
   const enabledCount = enabledStrategyCount(state.settings.scanStrategies);
   const [selected, setSelected] = useState<Set<string>>(
@@ -47,6 +64,12 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
   useEffect(() => {
     setSelected(new Set(candidates.map((user) => user.userId)));
   }, [candidates]);
+
+  useEffect(() => {
+    if (sortBy !== "priority" && !enabledIds.includes(sortBy)) {
+      setSortBy("priority");
+    }
+  }, [enabledIds, sortBy]);
 
   const queue = state.unfollowQueue;
   const queueLive = queue.status === "running" || queue.status === "paused";
@@ -206,8 +229,25 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
         开始清理（预览）
       </button>
 
+      <label className="flex items-center gap-2.5 text-sm">
+        <span className="shrink-0 text-muted">排序</span>
+        <select
+          aria-label="排序"
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value as CandidateSortBy)}
+          className="min-h-11 min-w-0 flex-1 rounded-[var(--radius-panel)] border border-border bg-surface px-3 text-sm"
+        >
+          <option value="priority">{CANDIDATE_SORT_PRIORITY_LABEL}</option>
+          {enabledIds.map((id) => (
+            <option key={id} value={id}>
+              {SCAN_STRATEGY_LABELS[id]}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <ul className="divide-y divide-border overflow-y-auto">
-        {candidates.map((user) => (
+        {sortedCandidates.map((user) => (
           <CandidateRow
             key={user.userId}
             user={user}
@@ -248,7 +288,11 @@ export function CleanupView({ state, send, now: nowOverride }: CleanupViewProps)
           onCancel={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);
-            void startQueue([...selected]);
+            void startQueue(
+              sortedCandidates
+                .filter((user) => selected.has(user.userId))
+                .map((user) => user.userId),
+            );
           }}
         />
       ) : null}
