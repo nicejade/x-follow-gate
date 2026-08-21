@@ -137,14 +137,14 @@ export function describeQueueProgress(input: QueueProgressInput): QueueProgressC
   const intervalMin = input.intervalMinSec ?? PROFILE_DWELL.minSec;
   const intervalMax = input.intervalMaxSec ?? PROFILE_DWELL.maxSec;
   const stats = `剩余 ${input.remaining} 个 · 本小时 ${input.hourCount}/${input.hourlyCap} · 本次会话 ${input.sessionCount}/${input.sessionCap}`;
-  const hint = `打开目标主页后停留 ${intervalMin}–${intervalMax} 秒再取关。${SETTINGS_HINT}`;
+  const hint = `打开目标主页后停留 ${intervalMin}–${intervalMax} 秒，确认框出现后再停留同样区间再取关。${SETTINGS_HINT}`;
 
   if (input.paused === true) {
     return { title: "队列已暂停", wait: "已暂停，不会自动继续。", stats, hint };
   }
 
   if (input.inFlight) {
-    return { title: "取关进行中", wait: "正在当前主页停留并取关。", stats, hint };
+    return { title: "取关进行中", wait: "正在当前主页停留，确认框出现后会再停留再取关。", stats, hint };
   }
 
   if (input.reason === "hourly-cap") {

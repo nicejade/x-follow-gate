@@ -285,8 +285,8 @@ export const UNFOLLOW_WATCHDOG_MS = 30_000;
 /** In-flight deadline scaled to the configured dwell upper bound. */
 export function unfollowWatchdogMs(settings: Settings): number {
   const { intervalMaxSec } = clampSettings(settings);
-  // Room for the confirmation dialog after the longest allowed dwell.
-  return Math.max(UNFOLLOW_WATCHDOG_MS, intervalMaxSec * 1000 + 20_000);
+  // Room for profile dwell + confirm-sheet dwell + the two-click confirmation.
+  return Math.max(UNFOLLOW_WATCHDOG_MS, intervalMaxSec * 2_000 + 20_000);
 }
 
 export function pickProfileDwellMs(

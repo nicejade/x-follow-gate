@@ -242,7 +242,15 @@ export async function runUnfollowCommand(
       random,
     ),
   );
-  const result = await unfollowOne(message.target, createBrowserUnfollowEnvironment(), message.account);
+  const result = await unfollowOne(
+    message.target,
+    createBrowserUnfollowEnvironment(),
+    message.account,
+    {
+      interval: { minSec: message.intervalMinSec, maxSec: message.intervalMaxSec },
+      random,
+    },
+  );
   report(result);
 }
 

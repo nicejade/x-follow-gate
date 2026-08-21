@@ -132,7 +132,7 @@ export function SettingsView({ state, send }: SettingsViewProps) {
           <p className="text-xs text-muted">
             默认 {PRESET_LIMITS.safe.intervalMinSec}–{PRESET_LIMITS.safe.intervalMaxSec}{" "}
             秒；低于 {HARD_LIMITS.minIntervalSec} 秒会按 {HARD_LIMITS.minIntervalSec}{" "}
-            秒保存。取关前会在此区间内随机停留，与安全档位无关。
+            秒保存。打开主页后、以及确认框出现后，会各在此区间内随机停留一次，与安全档位无关。
           </p>
         </div>
 

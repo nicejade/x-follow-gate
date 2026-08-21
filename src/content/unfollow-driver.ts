@@ -9,6 +9,7 @@
 
 import { detectAccount } from "@/content/auth-detector";
 import { normalizeHandle } from "@/shared/rules";
+import { pickProfileDwellMs } from "@/shared/safety";
 import type {
   AccountIdentity,
   FollowingUser,
@@ -24,11 +25,15 @@ const DIALOG_SELECTOR =
   '[data-testid="confirmationSheetDialog"], [role="alertdialog"], [role="dialog"]';
 const CONFIRM_TEST_ID = "confirmationSheetConfirm";
 
-const FOLLOWING_NAME = /^(following|正在关注)\b/i;
-const FOLLOW_NAME = /^(follow|关注)\b/i;
-const UNFOLLOW_NAME = /^(unfollow|取消关注)$/i;
+// English alternatives keep `\b` so "follow" does not match "Following".
+// CJK alternatives must not use `\b`: JS word boundaries only see ASCII `\w`.
+const FOLLOWING_NAME = /^(following\b|正在关注)/i;
+const FOLLOW_NAME = /^(follow\b|关注)/i;
+const UNFOLLOW_NAME = /^(unfollow\b|取消关注)/i;
+// Challenge copy must stay specific: a bare「验证」matches ordinary Chinese UI
+// (email verified, etc.) and would false-trip the circuit breaker.
 const CHALLENGE_TEXT =
-  /unusual activity|suspicious|verify (you are|it.?s you)|confirm your identity|验证|异常活动/i;
+  /unusual activity|suspicious|verify (you are|it.?s you)|confirm your identity|异常活动|可疑活动|确认你的身份|验证你是|验证身份|人机验证|请验证你的/i;
 const RATE_LIMIT_TEXT = /rate limit|try again later|too many requests|稍后重试|操作过于频繁/i;
 
 export interface UnfollowEnvironment {
@@ -37,7 +42,15 @@ export interface UnfollowEnvironment {
   detectAccount: (document: Document) => AccountIdentity | null;
   click: (element: Element) => void;
   waitFor: (predicate: () => boolean, timeoutMs: number) => Promise<boolean>;
+  /** Injected so confirm-sheet dwells are deterministic under test. */
+  sleep: (ms: number) => Promise<void>;
   timeoutMs?: number;
+}
+
+export interface UnfollowOptions {
+  /** Settings band reused for the confirm-sheet pause before「取消关注」. */
+  interval?: { minSec: number; maxSec: number };
+  random?: () => number;
 }
 
 export function createBrowserUnfollowEnvironment(
@@ -54,6 +67,7 @@ export function createBrowserUnfollowEnvironment(
       }
     },
     waitFor: (predicate, timeoutMs) => waitForMutation(documentRef, predicate, timeoutMs),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     timeoutMs: UNFOLLOW_WAIT_MS,
   };
 }
@@ -62,6 +76,7 @@ export async function unfollowOne(
   target: FollowingUser,
   env: UnfollowEnvironment,
   account: AccountIdentity,
+  options: UnfollowOptions = {},
 ): Promise<UnfollowResult> {
   const handle = normalizeHandle(target.handle);
   const base = { userId: target.userId, handle };
@@ -115,12 +130,20 @@ export async function unfollowOne(
     return outcome(base, "already-unfollowed", true);
   }
 
-  const confirm = findConfirmControl(env.document);
-  if (confirm === null) {
+  if (options.interval !== undefined) {
+    await env.sleep(pickProfileDwellMs(options.interval, options.random ?? Math.random));
+    const afterDwell = inspectBlockingState(env);
+    if (afterDwell !== null) {
+      return outcome(base, afterDwell);
+    }
+  }
+
+  const confirmAfterDwell = findConfirmControl(env.document);
+  if (confirmAfterDwell === null) {
     return outcome(base, "confirmation-missing");
   }
 
-  env.click(confirm);
+  env.click(confirmAfterDwell);
 
   const verified = await env.waitFor(
     () =>

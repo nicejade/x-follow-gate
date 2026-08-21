@@ -453,6 +453,15 @@ describe("runUnfollowCommand", () => {
     await promise;
 
     expect(unfollowOne).toHaveBeenCalledTimes(1);
+    expect(unfollowOne).toHaveBeenCalledWith(
+      message.target,
+      expect.anything(),
+      message.account,
+      {
+        interval: { minSec: 3, maxSec: 12 },
+        random: expect.any(Function),
+      },
+    );
     expect(report).toHaveBeenCalledWith(result);
     vi.useRealTimers();
   });
